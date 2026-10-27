@@ -2,7 +2,7 @@ import "server-only";
 import { PILLARS, type Pillar } from "@/lib/shared/pillars";
 import { DAILY_PILLAR_XP_CAP, levelFromXp, levelProgress, overallProgress } from "@/lib/shared/progression";
 
-import { APP_TIMEZONE, addDays, localClock } from "@/lib/shared/time";
+import { APP_TIMEZONE, addDays, daysBetween, localClock, startOfMonth } from "@/lib/shared/time";
 import type { DayProgress, GameState, ProgressSnapshot, WelcomeData } from "@/lib/shared/types";
 import { sanitizeEquipped, unlockedKeys } from "@/lib/shared/unlocks";
 import type { Q } from "../db";
@@ -17,8 +17,7 @@ import { ensureBoard, listDaily, listDefinitions } from "./quests";
 /** A new "visit" starts when the game is opened after this long away. */
 const VISIT_GAP_MS = 30 * 60 * 1000;
 
-async function weekProgress(q: Q, playerId: string, date: string): Promise<DayProgress[]> {
-  const from = addDays(date, -6);
+async function rangeProgress(q: Q, playerId: string, from: string, date: string): Promise<DayProgress[]> {
   const xpRows = await q<{ local_date: string; xp: number }[]>`
     select local_date, sum(amount)::int as xp from xp_transactions
     where player_id = ${playerId} and local_date between ${from} and ${date}
@@ -33,7 +32,7 @@ async function weekProgress(q: Q, playerId: string, date: string): Promise<DayPr
     select distinct local_date from rest_days
     where player_id = ${playerId} and scope = 'all' and local_date between ${from} and ${date}
   `;
-  return Array.from({ length: 7 }, (_, i) => {
+  return Array.from({ length: daysBetween(from, date) + 1 }, (_, i) => {
     const d = addDays(from, i);
     const qr = questRows.find((r) => r.local_date === d);
     return {
@@ -63,7 +62,7 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
       bodySummary(q, ctx.playerId, date),
       listGoals(q, ctx.playerId, date),
       journalForDay(q, ctx.playerId, date),
-      weekProgress(q, ctx.playerId, date),
+      rangeProgress(q, ctx.playerId, [addDays(date, -6), startOfMonth(date)].sort()[0], date),
       activeDays(q, ctx.playerId),
       q<{ key: string; unlocked_at: Date }[]>`select key, unlocked_at from unlocks where player_id = ${ctx.playerId} order by unlocked_at`,
       q<{ key: string; earned_at: Date }[]>`select key, earned_at from achievements where player_id = ${ctx.playerId} order by earned_at`,
@@ -107,7 +106,8 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
       fourWins: doneToday.size === 4,
       journal,
     },
-    week,
+    week: week.slice(-7),
+    calendar: { month: date.slice(0, 7), days: week.filter((d) => d.date >= startOfMonth(date)) },
     questLibrary: library,
     savings,
     finance,

@@ -1,4 +1,5 @@
 import "server-only";
+import { unstable_rethrow } from "next/navigation";
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { SESSION_COOKIE_NAMES, sessionCookieName, validateSession } from "./auth/session";
@@ -101,6 +102,9 @@ export function idParam(params: Record<string, string>, key = "id"): string {
 }
 
 export function handleError(err: unknown) {
+  // Let Next.js control-flow errors (e.g. "this route is dynamic" during
+  // prerendering) propagate instead of being turned into a 500 response.
+  unstable_rethrow(err);
   if (err instanceof AppError) return errorResponse(err.status, err.message, err.code);
   console.error("[api] unhandled error", err);
   return errorResponse(500, "Something went wrong on the server", "INTERNAL");

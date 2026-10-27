@@ -197,6 +197,8 @@ export interface GameState {
     journal: JournalEntryView[];
   };
   week: DayProgress[];
+  /** Current month up to today, for the habit calendar. */
+  calendar: { month: string; days: DayProgress[] };
   questLibrary: QuestDefinition[];
   savings: {
     goals: SavingsGoalView[];
