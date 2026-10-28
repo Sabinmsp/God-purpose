@@ -165,7 +165,7 @@ test("keyboard movement, interaction and the home scene", async ({ page }) => {
   await page.waitForTimeout(1500);
   const s0 = await state(page);
   await page.keyboard.down("ArrowRight");
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(3000);
   await page.keyboard.up("ArrowRight");
   await page.waitForTimeout(5000);
   const s1 = await state(page);
