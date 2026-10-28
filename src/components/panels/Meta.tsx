@@ -22,7 +22,7 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
     <Sheet title={s.player.name} subtitle={`${s.player.characterClass} · started at age ${s.player.startingAge}`} icon="👤" onClose={onClose}>
       <div className="px-card mb-4 flex items-center gap-4 p-3">
         <div className="rounded bg-navy-950 p-2">
-          <Portrait equipped={s.player.equipped} tier={s.body.physiqueTier} size={112} />
+          <Portrait equipped={s.player.equipped} tier={s.body.physiqueTier} size={112} art={s.player.settings.characterArt} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="font-pixel text-3xl text-gold">Level {s.stats.overall.level}</div>
@@ -50,6 +50,9 @@ export function ProfilePanel({ onClose }: { onClose: () => void }) {
         ))}
       </div>
       <Section title="Equipment">
+        {s.player.settings.characterArt !== "classic" && (
+          <p className="mb-2 text-xs text-cream-faint">Outfits, headwear and physique show on Classic art (Settings). Auras and companions show on both.</p>
+        )}
         <div className="space-y-3">
           {EQUIP_SLOTS.map((slot) => {
             const items = UNLOCKS.filter((u) => u.kind === slot);
@@ -270,6 +273,13 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               {label}
             </button>
           ))}
+          <button
+            className="px-btn secondary w-full !justify-start"
+            disabled={busy}
+            onClick={() => run(() => act("/api/player/settings", { characterArt: st.characterArt === "classic" ? "pixellab" : "classic" }, "PATCH"))}
+          >
+            🎨 Character art: {st.characterArt === "classic" ? "Classic (shows outfits & physique)" : "PixelLab"}
+          </button>
           <Field label={`Text size: ${Math.round(st.textScale * 100)}%`}>
             <input
               type="range"

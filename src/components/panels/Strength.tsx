@@ -226,7 +226,7 @@ export function StrengthPanel({ onClose }: { onClose: () => void }) {
         <>
           <Section title="Transformation">
             <div className="px-card flex items-center gap-3 p-3">
-              <Portrait equipped={s.player.equipped} tier={b.physiqueTier} size={72} />
+              <Portrait equipped={s.player.equipped} tier={b.physiqueTier} size={72} art="classic" />
               <div className="min-w-0 flex-1">
                 <div className="font-pixel" style={{ color: PILLAR_META.physical.color }}>
                   {PHYSIQUE_NAMES[b.physiqueTier]}

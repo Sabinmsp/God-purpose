@@ -12,7 +12,8 @@
     "setup": "tsx --env-file-if-exists=.env.local scripts/setup.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "pixellab:sync": "tsx --env-file-if-exists=.env.local scripts/pixellab-sync.ts"
   },
   "dependencies": {
     "next": "16.4.3",

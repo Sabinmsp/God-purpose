@@ -152,6 +152,7 @@ export const settingsSchema = z.object({
   reducedMotion: z.boolean().optional(),
   showSidePanel: z.boolean().optional(),
   textScale: z.number().min(0.85).max(1.4).optional(),
+  characterArt: z.enum(["pixellab", "classic"]).optional(),
 });
 
 export const equipSchema = z.object({

@@ -1,0 +1,64 @@
+{
+  "source": "pixellab",
+  "characterId": "1a894f95-9bc3-478e-8691-7ee353f81d56",
+  "name": "Sabin",
+  "syncedAt": "2026-10-28T04:35:18.330Z",
+  "rotations": {
+    "south": "rotations/south.png",
+    "east": "rotations/east.png",
+    "north": "rotations/north.png",
+    "west": "rotations/west.png",
+    "south-east": "rotations/south-east.png",
+    "north-east": "rotations/north-east.png",
+    "north-west": "rotations/north-west.png",
+    "south-west": "rotations/south-west.png"
+  },
+  "animations": {
+    "idle": {
+      "east": [
+        "idle/east/0.png",
+        "idle/east/1.png",
+        "idle/east/2.png",
+        "idle/east/3.png"
+      ],
+      "north": [
+        "idle/north/0.png",
+        "idle/north/1.png",
+        "idle/north/2.png",
+        "idle/north/3.png"
+      ],
+      "south": [
+        "idle/south/0.png",
+        "idle/south/1.png",
+        "idle/south/2.png",
+        "idle/south/3.png"
+      ]
+    },
+    "walk": {
+      "east": [
+        "walk/east/0.png",
+        "walk/east/1.png",
+        "walk/east/2.png",
+        "walk/east/3.png",
+        "walk/east/4.png",
+        "walk/east/5.png"
+      ],
+      "north": [
+        "walk/north/0.png",
+        "walk/north/1.png",
+        "walk/north/2.png",
+        "walk/north/3.png",
+        "walk/north/4.png",
+        "walk/north/5.png"
+      ],
+      "south": [
+        "walk/south/0.png",
+        "walk/south/1.png",
+        "walk/south/2.png",
+        "walk/south/3.png",
+        "walk/south/4.png",
+        "walk/south/5.png"
+      ]
+    }
+  }
+}

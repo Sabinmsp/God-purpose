@@ -220,6 +220,8 @@ export interface PlayerSettings {
   reducedMotion: boolean;
   showSidePanel: boolean;
   textScale: number;
+  /** PixelLab sprites (when installed) or the classic look that shows outfits and physique. */
+  characterArt: "pixellab" | "classic";
 }
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
@@ -227,6 +229,7 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   reducedMotion: false,
   showSidePanel: true,
   textScale: 1,
+  characterArt: "pixellab",
 };
 
 export type GameEvent =

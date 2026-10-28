@@ -2,6 +2,7 @@ import * as Phaser from "phaser";
 import type { GameState } from "@/lib/shared/types";
 import { playerLook } from "../art/character";
 import { bridge, touchInput } from "../bridge";
+import { PIXELLAB_KEY, hasPixelLab } from "../pixellab";
 import { registerCharacter } from "../textures";
 import { Actor, facingFrom, type Facing } from "./Actor";
 
@@ -11,7 +12,17 @@ let lookVersion = 0;
 let lastLookSig = "";
 let lastLookKey = "";
 
-/** Builds (or reuses) the player's sprite sheet for the current cosmetics. */
+/**
+ * The player's art: PixelLab sprites when installed and selected, otherwise
+ * the procedural look (which also shows outfits, headwear and physique).
+ */
+export function playerArt(scene: Phaser.Scene, state: GameState | null) {
+  const classic = ensurePlayerTexture(scene, state);
+  const usePixelLab = hasPixelLab(scene) && (state?.player.settings.characterArt ?? "pixellab") === "pixellab";
+  return { main: usePixelLab ? PIXELLAB_KEY : classic, classic };
+}
+
+/** Builds (or reuses) the procedural sprite sheet for the current cosmetics. */
 export function ensurePlayerTexture(scene: Phaser.Scene, state: GameState | null): string {
   const equipped = state?.player.equipped ?? {};
   const tier = state?.body.physiqueTier ?? 0;
@@ -50,7 +61,9 @@ export class Player extends Actor {
     facing: Facing,
     private sceneName: "village" | "home",
   ) {
-    super(scene, ensurePlayerTexture(scene, bridge.state), x, y);
+    const art = playerArt(scene, bridge.state);
+    super(scene, art.main, x, y);
+    this.fallbackKey = art.classic;
     this.facing = facing;
     this.animateMove(false);
     const kb = scene.input.keyboard!;
@@ -60,8 +73,9 @@ export class Player extends Actor {
 
   /** Applies cosmetics from the latest server state. */
   applyState(state: GameState) {
-    const key = ensurePlayerTexture(this.scene, state);
-    if (key !== this.textureKey) this.setTextureKey(key);
+    const art = playerArt(this.scene, state);
+    this.fallbackKey = art.classic;
+    if (art.main !== this.textureKey) this.setTextureKey(art.main);
     this.reducedMotion = state.player.settings.reducedMotion;
 
     const aura = state.player.equipped.aura;

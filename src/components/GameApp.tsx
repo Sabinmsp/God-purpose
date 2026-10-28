@@ -134,7 +134,7 @@ function Hud() {
         <div className="pointer-events-auto flex min-w-0 flex-col gap-1.5">
           <button className="px-panel flex items-center gap-2 !rounded-md px-2 py-1.5 text-left" onClick={() => openPanel("profile")} aria-label="Open character profile">
             <div className="rounded bg-navy-950">
-              <Portrait equipped={s.player.equipped} tier={s.body.physiqueTier} size={40} />
+              <Portrait equipped={s.player.equipped} tier={s.body.physiqueTier} size={40} art={s.player.settings.characterArt} />
             </div>
             <div className="min-w-0">
               <div className="font-pixel truncate leading-tight" data-testid="hud-name">
@@ -443,7 +443,7 @@ function WelcomeBack() {
     <div className="fixed inset-0 z-50 grid place-items-center bg-navy-950/80 p-4 backdrop-blur-sm">
       <div className="px-panel w-full max-w-md p-6 text-center anim-pop" role="dialog" aria-modal="true" aria-labelledby="welcome-title" data-testid="welcome">
         <div className="mx-auto mb-3 w-fit rounded-lg bg-navy-950 p-2">
-          <Portrait equipped={s.player.equipped} tier={s.body.physiqueTier} size={96} anim={w.levelUps.length ? "celebrate-1" : "idle-down-0"} />
+          <Portrait equipped={s.player.equipped} tier={s.body.physiqueTier} size={96} art={s.player.settings.characterArt} anim={w.levelUps.length ? "celebrate-1" : "idle-down-0"} />
         </div>
         <h2 id="welcome-title" className="font-pixel text-2xl text-gold">
           {w.firstVisit ? `Welcome, ${s.player.name}!` : `Welcome back, ${s.player.name}!`}

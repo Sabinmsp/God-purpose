@@ -164,8 +164,40 @@ export function PillarChip({ pillar, level, pct, onClick }: { pillar: Pillar; le
   );
 }
 
-export function Portrait({ equipped, tier, size = 64, anim = "idle-down-0" }: { equipped: Equipped; tier: number; size?: number; anim?: string }) {
+const PIXELLAB_PORTRAIT = "/assets/pixellab/sabin/rotations/south.png";
+let pixelLabCheck: Promise<boolean> | null = null;
+
+/** True once we know PixelLab art has been synced into /public. */
+function usePixelLabArt() {
+  const [available, setAvailable] = useState(false);
+  useEffect(() => {
+    pixelLabCheck ??= fetch("/assets/pixellab/sabin/manifest.json", { method: "HEAD" })
+      .then((r) => r.ok)
+      .catch(() => false);
+    let alive = true;
+    void pixelLabCheck.then((ok) => alive && setAvailable(ok));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return available;
+}
+
+export function Portrait({
+  equipped,
+  tier,
+  size = 64,
+  anim = "idle-down-0",
+  art = "pixellab",
+}: {
+  equipped: Equipped;
+  tier: number;
+  size?: number;
+  anim?: string;
+  art?: "pixellab" | "classic";
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const pixelLab = usePixelLabArt() && art === "pixellab";
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
@@ -175,7 +207,11 @@ export function Portrait({ equipped, tier, size = 64, anim = "idle-down-0" }: { 
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(frame.px.toCanvas(), 0, 0, 32, 32, 0, 0, canvas.width, canvas.height);
-  }, [equipped, tier, anim]);
+  }, [equipped, tier, anim, pixelLab]);
+  if (pixelLab) {
+    // eslint-disable-next-line @next/next/no-img-element -- tiny pixel sprite, must not be resampled
+    return <img src={PIXELLAB_PORTRAIT} width={size} height={size} alt="" style={{ width: size, height: size, imageRendering: "pixelated" }} aria-hidden />;
+  }
   return <canvas ref={ref} width={size} height={size} style={{ width: size, height: size }} aria-hidden />;
 }
 
