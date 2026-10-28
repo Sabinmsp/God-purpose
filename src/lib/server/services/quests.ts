@@ -1,6 +1,6 @@
 import "server-only";
 import type { Pillar } from "@/lib/shared/pillars";
-import { MAX_QUESTS_PER_PILLAR, cappedAward } from "@/lib/shared/progression";
+import { ALLOWED_QUEST_XP, MAX_QUESTS_PER_PILLAR, cappedAward } from "@/lib/shared/progression";
 import { addDays, weekdayOf } from "@/lib/shared/time";
 import type { DailyQuest, GameEvent, QuestDefinition } from "@/lib/shared/types";
 import type { Q, Tx } from "../db";
@@ -248,28 +248,39 @@ async function assertGoal(tx: Q, ctx: Ctx, goalId: string | null | undefined) {
   if (!g) throw badRequest("Linked goal not found");
 }
 
+/**
+ * Inserts a quest definition with every server-side rule applied (per-pillar
+ * limit, linked goal ownership) and puts it on today's board when scheduled
+ * — or always, with `addToday`. Shared by player-created and AI-approved quests.
+ */
+export async function insertQuestDef(tx: Tx, ctx: Ctx, input: QuestInput & { addToday?: boolean }): Promise<string> {
+  if (!(ALLOWED_QUEST_XP as readonly number[]).includes(input.xp)) throw badRequest("XP must be one of the allowed values");
+  const [{ n }] = await tx<{ n: number }[]>`
+    select count(*)::int as n from quest_definitions
+    where player_id = ${ctx.playerId} and pillar = ${input.pillar} and archived_at is null
+  `;
+  if (n >= MAX_QUESTS_PER_PILLAR) throw conflict(`Keep it manageable: at most ${MAX_QUESTS_PER_PILLAR} quests per pillar`);
+  await assertGoal(tx, ctx, input.goalId);
+  const [def] = await tx<{ id: string }[]>`
+    insert into quest_definitions (player_id, pillar, title, xp, on_board, days_of_week, goal_id, sort_order)
+    values (${ctx.playerId}, ${input.pillar}, ${input.title}, ${input.xp}, ${input.onBoard},
+            ${input.daysOfWeek}, ${input.goalId ?? null}, ${n + 100})
+    returning id
+  `;
+  const date = today(ctx);
+  if (input.addToday || (input.onBoard && input.daysOfWeek.includes(weekdayOf(date)))) {
+    await tx`
+      insert into daily_quests (player_id, local_date, quest_def_id, pillar, title, xp)
+      values (${ctx.playerId}, ${date}, ${def.id}, ${input.pillar}, ${input.title}, ${input.xp})
+      on conflict do nothing
+    `;
+  }
+  return def.id;
+}
+
 export function createQuest(ctx: Ctx, input: QuestInput) {
   return mutate(ctx, async (tx) => {
-    const [{ n }] = await tx<{ n: number }[]>`
-      select count(*)::int as n from quest_definitions
-      where player_id = ${ctx.playerId} and pillar = ${input.pillar} and archived_at is null
-    `;
-    if (n >= MAX_QUESTS_PER_PILLAR) throw conflict(`Keep it manageable: at most ${MAX_QUESTS_PER_PILLAR} quests per pillar`);
-    await assertGoal(tx, ctx, input.goalId);
-    const [def] = await tx<{ id: string }[]>`
-      insert into quest_definitions (player_id, pillar, title, xp, on_board, days_of_week, goal_id, sort_order)
-      values (${ctx.playerId}, ${input.pillar}, ${input.title}, ${input.xp}, ${input.onBoard},
-              ${input.daysOfWeek}, ${input.goalId ?? null}, ${n + 100})
-      returning id
-    `;
-    const date = today(ctx);
-    if (input.onBoard && input.daysOfWeek.includes(weekdayOf(date))) {
-      await tx`
-        insert into daily_quests (player_id, local_date, quest_def_id, pillar, title, xp)
-        values (${ctx.playerId}, ${date}, ${def.id}, ${input.pillar}, ${input.title}, ${input.xp})
-        on conflict do nothing
-      `;
-    }
+    await insertQuestDef(tx, ctx, input);
   });
 }
 

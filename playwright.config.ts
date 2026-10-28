@@ -25,6 +25,9 @@ export default defineConfig({
       DATABASE_URL: process.env.E2E_DATABASE_URL ?? `postgres://${user}@localhost:5432/fourwins_e2e`,
       AUTH_SECRET: "e2e-only-auth-secret-0123456789abcdef",
       FW_PASSWORD: E2E_PASSWORD,
+      // Marks the AI as configured; e2e tests intercept every AI call, so this
+      // placeholder never reaches a provider.
+      ANTHROPIC_API_KEY: "e2e-placeholder-not-a-real-key",
     },
   },
 });

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import postgres from "postgres";
 import { E2E_PASSWORD } from "../../playwright.config";
 
 async function login(page: Page) {
@@ -161,14 +162,17 @@ test("another device sees the same character, goals, balances and unlocks", asyn
 
 test("keyboard movement, interaction and the home scene", async ({ page }) => {
   await login(page);
-  // Headless software WebGL renders the first frames slowly; let the world settle.
+  // Headless software WebGL can run at a frame or two per second, and Phaser
+  // caps each frame's time step, so hold the key until the save lands.
   await page.waitForTimeout(1500);
   const s0 = await state(page);
   await page.keyboard.down("ArrowRight");
-  await page.waitForTimeout(3000);
+  let s1 = s0;
+  for (let i = 0; i < 30 && (s1.player.position.x ?? 0) <= (s0.player.position.x ?? 0) + 10; i++) {
+    await page.waitForTimeout(1000);
+    s1 = await state(page);
+  }
   await page.keyboard.up("ArrowRight");
-  await page.waitForTimeout(5000);
-  const s1 = await state(page);
   expect(s1.player.position.x).toBeGreaterThan((s0.player.position.x ?? 0) + 10);
   expect(s1.player.position.facing).toBe("right");
 
@@ -182,12 +186,15 @@ test("keyboard movement, interaction and the home scene", async ({ page }) => {
   await expect(page.getByTestId("focus-prompt")).toContainText("Your Home", { timeout: 10_000 });
   await page.keyboard.press("e");
   await expect(page.getByTestId("focus-prompt")).not.toContainText("Your Home", { timeout: 5000 });
-  await page.waitForTimeout(1500);
+  // Entering saves the position as the scene changes; walking inside saves it again.
   await page.keyboard.down("ArrowUp");
-  await page.waitForTimeout(1500);
+  let scene = "village";
+  for (let i = 0; i < 30 && scene !== "home"; i++) {
+    await page.waitForTimeout(1000);
+    scene = (await state(page)).player.position.scene;
+  }
   await page.keyboard.up("ArrowUp");
-  await page.waitForTimeout(5000);
-  expect((await state(page)).player.position.scene).toBe("home");
+  expect(scene).toBe("home");
 });
 
 test("winning all four pillars grows the village, celebrates, and is recorded in the journey", async ({ page }) => {
@@ -239,6 +246,95 @@ test("winning all four pillars grows the village, celebrates, and is recorded in
   await expect(journey.getByTestId("journey-changes")).toContainText("You evolved into Initiate");
   await journey.getByRole("tab", { name: "Before & after" }).click();
   await expect(journey.getByTestId("before-after")).toBeVisible();
+});
+
+test("Four Wins AI: talk to the NPC, chat, approve a mission, manage memory, check location", async ({ page, context }) => {
+  await context.grantPermissions(["geolocation"], { origin: "http://localhost:3100" });
+  await context.setGeolocation({ latitude: -12.463441, longitude: 130.845642, accuracy: 25 });
+  await login(page);
+
+  // Seed a past exchange in which the AI suggested a mission (as the server would store it).
+  const db = postgres(process.env.E2E_DATABASE_URL ?? `postgres://${process.env.USER}@localhost:5432/fourwins_e2e`, { max: 1 });
+  const [player] = await db`select id from players limit 1`;
+  const [msg] = await db`insert into ai_messages (player_id, role, content) values (${player.id}, 'assistant', 'Earlier: here is a mission idea.') returning id`;
+  await db`insert into ai_proposals (player_id, message_id, kind, payload) values (${player.id}, ${msg.id}, 'mission', ${db.json({ pillar: "spiritual", title: "Ten minutes of quiet breathing", xp: 20, reason: "A calm reset." })})`;
+  await db.end();
+
+  // Walk up to the robot and press E.
+  await page.request.post("/api/player/position", {
+    headers: { origin: new URL(page.url()).origin },
+    data: { scene: "village", x: 440, y: 270, facing: "up" },
+  });
+  await page.reload();
+  await expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("focus-prompt")).toContainText("Four Wins AI", { timeout: 10_000 });
+  await page.keyboard.press("e");
+  const panel = page.getByRole("dialog", { name: "Four Wins AI" });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByTestId("ai-reply")).toContainText("Earlier: here is a mission idea.");
+
+  // Sending a message: the request carries only the message (no location unless ticked).
+  let sentBody: { message: string; location?: unknown } | null = null;
+  await page.route("**/api/ai/chat", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    sentBody = route.request().postDataJSON();
+    await new Promise((r) => setTimeout(r, 400));
+    await route.fulfill({
+      json: {
+        ok: true,
+        messages: [
+          { id: crypto.randomUUID(), role: "user", content: sentBody!.message, createdAt: new Date().toISOString() },
+          { id: crypto.randomUUID(), role: "assistant", content: "MENTAL: finish your reading quest first.", createdAt: new Date().toISOString() },
+        ],
+        proposals: [],
+        status: { configured: true, provider: "anthropic", model: "test", memoryEnabled: true, remainingToday: 149 },
+      },
+    });
+  });
+  await panel.getByRole("button", { name: "What should I focus on today?" }).click();
+  await expect(panel.getByTestId("ai-thinking")).toBeVisible();
+  await expect(panel.getByTestId("ai-reply").last()).toContainText("finish your reading quest first");
+  expect(sentBody).toEqual({ message: "What should I focus on today?", location: null });
+
+  // Approve the suggested mission — only then does it reach the quest board.
+  const before = await state(page);
+  expect(before.today.quests.some((q: { title: string }) => q.title === "Ten minutes of quiet breathing")).toBe(false);
+  const card = panel.getByTestId("ai-mission-proposal");
+  await expect(card).toContainText("Ten minutes of quiet breathing");
+  await card.getByRole("button", { name: "Add to today" }).click();
+  await expect(card).toContainText("Added to your quests");
+  const after = await state(page);
+  expect(after.today.quests.find((q: { title: string }) => q.title === "Ten minutes of quiet breathing")).toMatchObject({ status: "open", xp: 20 });
+
+  // Memory: add, correct, survive a reload, delete.
+  await panel.getByRole("tab", { name: /Memory/ }).click();
+  await panel.getByLabel("What should Four Wins AI remember?").fill("I prefer morning workouts");
+  await panel.getByRole("button", { name: "Save memory" }).click();
+  await expect(panel.getByTestId("ai-memory-list")).toContainText("I prefer morning workouts");
+  await panel.getByRole("button", { name: "Edit" }).click();
+  await panel.getByLabel("Edit memory").fill("I prefer workouts before 8am");
+  await panel.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(panel.getByTestId("ai-memory-list")).toContainText("before 8am");
+
+  await page.unroute("**/api/ai/chat");
+  await page.reload();
+  await expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Four Wins AI", exact: true }).click();
+  await panel.getByRole("tab", { name: /Memory/ }).click();
+  await expect(panel.getByTestId("ai-memory-list")).toContainText("I prefer workouts before 8am");
+  await expect(panel.getByTestId("ai-memory-list").getByText("approved from chat")).toHaveCount(0);
+
+  // Location: off by default, explicit opt-in, shown to the player only.
+  await panel.getByRole("tab", { name: "Location" }).click();
+  await expect(panel.getByTestId("location-check")).toHaveCount(0);
+  await panel.getByTestId("location-toggle").click();
+  await panel.getByTestId("location-check").click();
+  await expect(panel.getByTestId("location-result")).toContainText("-12.4634, 130.8456");
+  const settings = (await state(page)).player.settings;
+  expect(settings.locationAwareness).toBe(true);
+  expect(JSON.stringify(settings)).not.toContain("130.84");
+  await panel.getByTestId("location-toggle").click();
+  await expect(panel.getByTestId("location-check")).toHaveCount(0);
 });
 
 test("logout ends the session on the server", async ({ page }) => {

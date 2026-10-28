@@ -235,6 +235,10 @@ export interface PlayerSettings {
   textScale: number;
   /** PixelLab sprites (when installed) or the classic look that shows outfits and physique. */
   characterArt: "pixellab" | "classic";
+  /** Let the AI companion read the memories the player saved or approved. */
+  aiMemory: boolean;
+  /** Show the optional "check my location" tools. Coordinates are never stored. */
+  locationAwareness: boolean;
 }
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
@@ -243,6 +247,8 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   showSidePanel: true,
   textScale: 1,
   characterArt: "pixellab",
+  aiMemory: true,
+  locationAwareness: false,
 };
 
 export type GameEvent =

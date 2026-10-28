@@ -1,5 +1,6 @@
 import { PILLARS } from "@/lib/shared/pillars";
 import * as B from "./buildings";
+import { aiBot } from "./companion";
 import { DECORATIONS, buildingStage, victoryLantern } from "./evolution";
 import type { Pixels } from "./paint";
 import * as P from "./props";
@@ -43,6 +44,7 @@ export const WORLD_ART: Record<string, () => Pixels> = {
   "victory-lantern": () => victoryLantern(),
   fountain: () => P.fountain(0),
   waterfall: () => P.waterfall(0),
+  "ai-bot": () => aiBot(0),
 };
 
 for (let s = 0; s <= 5; s++) WORLD_ART[`garage-${s}`] = () => B.garage(s);
@@ -59,4 +61,4 @@ export const buildingKey = (pillar: string, stage: number) => `building-${pillar
 export const decorationKey = (pillar: string, n: number) => `deco-${pillar}-${n % 6}`;
 
 /** Animated props are registered as sheets by Phaser; snapshots use frame 0. */
-export const ANIMATED_PROPS = new Set(["fountain", "waterfall"]);
+export const ANIMATED_PROPS = new Set(["fountain", "waterfall", "ai-bot"]);

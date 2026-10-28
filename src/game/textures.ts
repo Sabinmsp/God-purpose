@@ -1,5 +1,6 @@
 import * as Phaser from "phaser";
 import { NPC_LOOKS, buildCharacter, type Look } from "./art/character";
+import { aiBot, chatBubble } from "./art/companion";
 import { disciplineRing, fourCrest } from "./art/evolution";
 import { FONT_CELL, FONT_CHARS, buildFont } from "./art/font";
 import * as F from "./art/furniture";
@@ -53,6 +54,8 @@ export function buildAllTextures(scene: Phaser.Scene) {
   addPixels(scene, "discipline-ring", disciplineRing());
   addPixels(scene, "four-crest", fourCrest());
 
+  anim2(scene, "ai-bot", [0, 1, 2, 3].map(aiBot), 4);
+  addPixels(scene, "chat-bubble", chatBubble());
   anim2(scene, "fountain", [P.fountain(0), P.fountain(1)], 3);
   anim2(scene, "waterfall", [P.waterfall(0), P.waterfall(1), P.waterfall(2)], 6);
   anim2(scene, "owl", [P.owl(0), P.owl(1)], 3);

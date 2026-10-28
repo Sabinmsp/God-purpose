@@ -61,6 +61,8 @@ export const SPOTS = {
   fountain: { x: 512, y: 372 },
   board: { x: 452, y: 318 },
   spawn: { x: 512, y: 246 },
+  /** Four Wins AI stands on the path just west of the home's front gate. */
+  ai: { x: 440, y: 252 },
 };
 
 export function buildVillage() {
@@ -138,6 +140,10 @@ export function buildVillage() {
   add({ key: "bench", x: 448, y: 420, collide: { w: 24, h: 6 } });
   add({ key: "bench", x: 576, y: 420, collide: { w: 24, h: 6 } });
   for (const [x, y] of [[440, 268], [584, 268]]) add({ key: "bush-berry", x, y, collide: { w: 14, h: 6 } });
+
+  // Four Wins AI companion — it hovers, so it never blocks the road.
+  add({ key: "ai-bot", anim: "ai-bot", x: SPOTS.ai.x, y: SPOTS.ai.y });
+  lights.push({ x: SPOTS.ai.x, y: SPOTS.ai.y - 16, size: 50, color: "cool" });
 
   // Home garden
   add({ key: "mailbox", x: 564, y: 232, collide: { w: 6, h: 4 } });
@@ -226,6 +232,7 @@ export function buildVillage() {
     { id: "vault", ...SPOTS.vault, y: SPOTS.vault.y + 10, r: 26, label: "Tuition Vault", verb: "Open", action: { type: "panel", panel: "financial" } },
     { id: "garage", ...SPOTS.garage, y: SPOTS.garage.y + 10, r: 28, label: "Car Garage", verb: "Open", action: { type: "panel", panel: "financial" } },
     { id: "board", ...SPOTS.board, y: SPOTS.board.y + 10, r: 26, label: "Daily Quest Board", verb: "Read", action: { type: "panel", panel: "quests" } },
+    { id: "ai", ...SPOTS.ai, y: SPOTS.ai.y + 4, r: 28, label: "Four Wins AI", verb: "Talk to", action: { type: "panel", panel: "ai" } },
     {
       id: "fountain",
       ...SPOTS.fountain,

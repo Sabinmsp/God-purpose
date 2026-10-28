@@ -153,6 +153,8 @@ export const settingsSchema = z.object({
   showSidePanel: z.boolean().optional(),
   textScale: z.number().min(0.85).max(1.4).optional(),
   characterArt: z.enum(["pixellab", "classic"]).optional(),
+  aiMemory: z.boolean().optional(),
+  locationAwareness: z.boolean().optional(),
 });
 
 export const equipSchema = z.object({

@@ -33,6 +33,8 @@ interface Store {
   toast: (t: Omit<Toast, "id">) => void;
   dismissToast: (id: number) => void;
   dismissWelcome: () => void;
+  /** Applies a mutation result fetched outside `act` (state + events). */
+  applyResult: (res: Pick<MutationResult, "state" | "events">) => GameEvent[];
   /** Set for a few seconds after a complete Four Wins day. */
   celebration: { day: number; total: number } | null;
 }
@@ -137,32 +139,40 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
   }, [apply, handleError]);
 
+  /** Applies a server result: new state, then toasts, sounds and world effects for its events. */
+  const applyResult = useCallback(
+    (res: Pick<MutationResult, "state" | "events">) => {
+      apply(res.state);
+      const events = res.events ?? [];
+      if (events.length) {
+        bridge.emit("events", events);
+        eventToasts(events).forEach(toast);
+        const fourWins = events.find((e) => e.type === "fourwins");
+        if (fourWins) {
+          setCelebration({ day: fourWins.day, total: fourWins.total });
+          setTimeout(() => setCelebration(null), 5200);
+          play("fanfare");
+        } else if (events.some((e) => e.type === "levelup" || e.type === "stage")) play("levelup");
+        else if (events.some((e) => e.type === "unlock" || e.type === "achievement")) play("unlock");
+        else if (events.some((e) => e.type === "action" && e.pillar === "financial")) play("coin");
+        else if (events.some((e) => e.type === "xp")) play("complete");
+      }
+      return events;
+    },
+    [apply, toast],
+  );
+
   const act = useCallback(
     async (path: string, body?: unknown, method?: string) => {
       try {
         const res = await api<MutationResult>(path, { body: body ?? (method === "DELETE" ? undefined : {}), method });
-        apply(res.state);
-        const events = res.events ?? [];
-        if (events.length) {
-          bridge.emit("events", events);
-          eventToasts(events).forEach(toast);
-          const fourWins = events.find((e) => e.type === "fourwins");
-          if (fourWins) {
-            setCelebration({ day: fourWins.day, total: fourWins.total });
-            setTimeout(() => setCelebration(null), 5200);
-            play("fanfare");
-          } else if (events.some((e) => e.type === "levelup" || e.type === "stage")) play("levelup");
-          else if (events.some((e) => e.type === "unlock" || e.type === "achievement")) play("unlock");
-          else if (events.some((e) => e.type === "action" && e.pillar === "financial")) play("coin");
-          else if (events.some((e) => e.type === "xp")) play("complete");
-        }
-        return events;
+        return applyResult(res);
       } catch (err) {
         handleError(err);
         return null;
       }
     },
-    [apply, handleError, toast],
+    [applyResult, handleError],
   );
 
   const openPanel = useCallback((p: PanelId | null) => {
@@ -211,12 +221,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
       toast,
       dismissToast,
       celebration,
+      applyResult,
       dismissWelcome: () => {
         if (stateRef.current) apply({ ...stateRef.current, welcome: null });
         void api("/api/welcome/ack", { body: {} }).catch(() => {});
       },
     }),
-    [state, loading, locked, panel, dialog, toasts, celebration, openPanel, act, refresh, toast, dismissToast, apply],
+    [state, loading, locked, panel, dialog, toasts, celebration, openPanel, act, refresh, toast, dismissToast, apply, applyResult],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

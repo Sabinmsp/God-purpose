@@ -11,7 +11,8 @@ export type PanelId =
   | "achievements"
   | "settings"
   | "guide"
-  | "journey";
+  | "journey"
+  | "ai";
 
 export interface Focus {
   id: string;

@@ -107,6 +107,17 @@ vercel deploy --prod
 
 Then open the production URL, log in, complete a quest, close the browser, and log in on your phone. Your character, quests, balances and unlocks will be there.
 
+## Four Wins AI companion
+
+A hovering robot stands by your front path. Walk up and press **E**, click/tap it, or use the 🤖 button to chat.
+
+- **Real model, server-side:** `POST /api/ai/chat` authenticates you, validates the message, rate-limits (20 per 10 min, 150 per day), loads your real game state and approved memories, and calls Claude through the official Anthropic SDK (`claude-opus-5-5` by default, with the server-side refusal fallback enabled). Configure with `ANTHROPIC_API_KEY`, `AI_MODEL`, `AI_EFFORT` (see `.env.example`). Without a key the companion says it is sleeping; nothing else is affected.
+- **Grounded answers:** every message carries a `<game_data>` block built from your records — campaign day, done/open missions, levels, XP, streaks, Four Wins progress, savings and recent achievements — and the model is told to treat it as data and never invent progress.
+- **Approval before anything changes:** the model can only *propose* missions and memories (structured output). Proposals are sanitised on the server (allowed XP values, no duplicates, limits) and stored as pending cards. Nothing touches quests, XP or money until you press **Add to today** / **Add as daily quest** / **Save memory**, and approved missions go through the same validation as quests you create.
+- **Memory you control:** add, correct, delete, delete all, or switch memory off. Only memories you typed or approved are stored; the AI's guesses never are. Chat and memories are in your data export, and **Clear conversation** deletes the chat.
+- **Location (optional, off by default):** turning on *location awareness* reveals a one-off **Check my location** button (browser permission, no tracking). Coordinates stay in the browser tab; the AI receives an approximate position (±1 km) only on messages where you tick the box, and it is never stored.
+- **Maps later:** `src/lib/location/places.ts` defines the `PlacesProvider` interface for nearby gyms, libraries, universities and workplaces (MapLibre or a restricted Google Maps key behind a server route).
+
 ## PixelLab art (optional)
 
 All art is original and procedural, so the game is complete without external assets. `src/lib/server/assets/pixellab.ts` holds the server-only adapter and the character spec (Sabin, 32 px, 4 directions, all animations). With a working PixelLab key (`PIXELLAB_API_KEY`, server-only) you can generate matching sprite sheets and swap them in for the procedural ones.

@@ -11,6 +11,7 @@ import { formatAud } from "@/lib/shared/money";
 import { PILLARS, PILLAR_META } from "@/lib/shared/pillars";
 import { localClock } from "@/lib/shared/time";
 import { UNLOCKS_BY_KEY } from "@/lib/shared/unlocks";
+import { AiPanel } from "./panels/Ai";
 import { JourneyPanel } from "./panels/Journey";
 import { AchievementsPanel, GoalsPanel, GuidePanel, ProfilePanel, SettingsPanel } from "./panels/Meta";
 import { MindPanel, SanctuaryPanel } from "./panels/MindSpirit";
@@ -186,6 +187,7 @@ function Hud() {
               [
                 ["quests", "📜", "Daily quests (Q)"],
                 ["journey", "🗺️", "75-day journey"],
+                ["ai", "🤖", "Four Wins AI"],
                 ["goals", "🗓️", "Goals & calendar"],
                 ["achievements", "🏆", "Trophies"],
                 ["settings", "⚙️", "Settings"],
@@ -272,6 +274,8 @@ function PanelHost() {
       return <SettingsPanel onClose={close} />;
     case "journey":
       return <JourneyPanel onClose={close} />;
+    case "ai":
+      return <AiPanel onClose={close} />;
     case "guide":
       return <GuidePanel onClose={close} />;
     default:

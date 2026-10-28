@@ -5,6 +5,7 @@ import { PILLARS, type Pillar } from "@/lib/shared/pillars";
 import type { GameState } from "@/lib/shared/types";
 import { buildingKey, decorationKey } from "../art/registry";
 import { T, TILE } from "../art/tiles";
+import { play } from "../audio";
 import { bridge } from "../bridge";
 import type { Facing } from "../objects/Actor";
 import { Npc } from "../objects/Npc";
@@ -60,6 +61,7 @@ export class VillageScene extends WorldScene {
     for (const p of v.props) {
       const obj = p.anim ? this.add.sprite(p.x, p.y, p.anim).play(p.anim) : this.add.image(p.x, p.y, p.key);
       obj.setOrigin(0.5, 1).setDepth(p.flat ? -5 : p.y);
+      if (p.key === "ai-bot") this.setupAiCompanion(obj);
     }
     for (const c of v.colliders) this.addSolid(c.x, c.y, c.w, c.h);
 
@@ -95,6 +97,19 @@ export class VillageScene extends WorldScene {
     // Warm house and temple windows at night.
     for (const [x, y] of [[490, 200], [530, 200], [240, 200], [176, 200], [208, 520], [232, 520]]) this.dayNight.addLight(x, y, 36, "glow-warm");
     this.cameras.main.fadeIn(250, 11, 16, 48);
+  }
+
+  /** Four Wins AI: click/tap opens the chat; a bobbing bubble shows it can talk. */
+  private setupAiCompanion(bot: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite) {
+    bot.setInteractive({ useHandCursor: true, pixelPerfect: false });
+    bot.on("pointerdown", () => {
+      if (bridge.blocked) return;
+      play("open");
+      bridge.emit("open-panel", "ai");
+    });
+    const bubble = this.add.image(bot.x + 9, bot.y - 34, "chat-bubble").setDepth(bot.y + 1);
+    this.tweens.add({ targets: bubble, y: bubble.y - 3, yoyo: true, repeat: -1, duration: 700, ease: "Sine.easeInOut" });
+    bubble.setInteractive({ useHandCursor: true }).on("pointerdown", () => !bridge.blocked && bridge.emit("open-panel", "ai"));
   }
 
   private ambient() {

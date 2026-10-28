@@ -18,6 +18,10 @@ export async function exportPlayerData(q: Q, playerId: string) {
     "finance_entries",
     "savings_goals",
     "savings_ledger",
+    "campaigns",
+    "ai_memories",
+    "ai_messages",
+    "ai_proposals",
   ] as const;
   const [player] = await q`
     select id, display_name, character_class, starting_age, created_at, pos_scene, pos_x, pos_y, facing, equipped, settings
