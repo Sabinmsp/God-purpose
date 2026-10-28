@@ -6,10 +6,12 @@ import { GameProvider, useGame, useGameState } from "@/client/store";
 import { play } from "@/game/audio";
 import { bridge, touchInput, type Focus } from "@/game/bridge";
 import { ACHIEVEMENTS_BY_KEY } from "@/lib/shared/achievements";
+import { EVOLUTION, STAGE_NAMES } from "@/lib/shared/campaign";
 import { formatAud } from "@/lib/shared/money";
 import { PILLARS, PILLAR_META } from "@/lib/shared/pillars";
 import { localClock } from "@/lib/shared/time";
 import { UNLOCKS_BY_KEY } from "@/lib/shared/unlocks";
+import { JourneyPanel } from "./panels/Journey";
 import { AchievementsPanel, GoalsPanel, GuidePanel, ProfilePanel, SettingsPanel } from "./panels/Meta";
 import { MindPanel, SanctuaryPanel } from "./panels/MindSpirit";
 import { QuestBoardPanel } from "./panels/QuestBoard";
@@ -52,6 +54,7 @@ function Shell() {
       {state && <PanelHost />}
       {state && <DialogBox />}
       {state?.welcome && <WelcomeBack />}
+      <Celebration />
       <Toasts />
       {locked && <PinLock />}
     </main>
@@ -86,6 +89,12 @@ function GameCanvas() {
       const active = document.activeElement;
       if (!active || active === document.body) el.focus({ preventScroll: true });
     });
+    // Mirrors what has grown in the world (read by e2e tests; harmless otherwise).
+    const offWorld = bridge.on("world", (w) => {
+      el.setAttribute("data-decorations", String(w.decorations));
+      el.setAttribute("data-lanterns", String(w.lanterns));
+      el.setAttribute("data-stages", JSON.stringify(w.stages));
+    });
     void import("@/game/createGame").then(({ createGame }) => {
       if (cancelled || !ref.current) return;
       game = createGame(ref.current);
@@ -94,6 +103,7 @@ function GameCanvas() {
     return () => {
       cancelled = true;
       offReady();
+      offWorld();
       game?.destroy(true);
       started.current = false;
     };
@@ -141,7 +151,7 @@ function Hud() {
                 {s.player.name}
               </div>
               <div className="font-pixel text-xs text-gold" data-testid="hud-level">
-                LV {s.stats.overall.level} · {s.player.characterClass}
+                LV {s.stats.overall.level} · {EVOLUTION[s.campaign.progress.tier].title}
               </div>
               <Bar value={s.stats.overall.pct} className="mt-1 !h-2 w-28" label="Overall XP" />
             </div>
@@ -161,10 +171,21 @@ function Hud() {
               🔥 {s.stats.streak.current} day streak
             </div>
           </div>
-          <nav className="flex gap-1" aria-label="Menus">
+          <button
+            className="px-panel font-pixel !rounded-md px-2.5 py-1 text-right text-xs hover:brightness-110"
+            onClick={() => (play("click"), openPanel("journey"))}
+            aria-label="Open the 75-day journey"
+            data-testid="hud-campaign"
+          >
+            <span className="text-cream">{campaignLabel(s.campaign.dayNumber, s.campaign.totalDays)}</span>
+            <span className="ml-2 text-gold">★ {s.campaign.progress.fourWinsDays}</span>
+            <Bar value={Math.max(0, Math.min(s.campaign.dayNumber, s.campaign.totalDays)) / s.campaign.totalDays} className="mt-1 !h-1.5 w-full !border" />
+          </button>
+          <nav className="flex flex-col gap-1 sm:flex-row" aria-label="Menus">
             {(
               [
                 ["quests", "📜", "Daily quests (Q)"],
+                ["journey", "🗺️", "75-day journey"],
                 ["goals", "🗓️", "Goals & calendar"],
                 ["achievements", "🏆", "Trophies"],
                 ["settings", "⚙️", "Settings"],
@@ -249,6 +270,8 @@ function PanelHost() {
       return <AchievementsPanel onClose={close} />;
     case "settings":
       return <SettingsPanel onClose={close} />;
+    case "journey":
+      return <JourneyPanel onClose={close} />;
     case "guide":
       return <GuidePanel onClose={close} />;
     default:
@@ -437,7 +460,12 @@ function WelcomeBack() {
         color: "#f2c14e",
       });
     if (!gained.length && !w.levelUps.length) lines.unshift({ text: "No new wins logged since your last visit. Today is a fresh start." });
+    for (const u of w.stageUps ?? []) lines.push({ text: `${PILLAR_META[u.pillar].world} grew into the ${STAGE_NAMES[u.pillar][u.to]}`, color: PILLAR_META[u.pillar].color });
+    if (w.fourWinsGained > 0) lines.push({ text: `🏮 ${w.fourWinsGained} new victory lantern${w.fourWinsGained === 1 ? "" : "s"} in the plaza`, color: "#f2c14e" });
+    if (w.evolvedTo != null) lines.push({ text: `✨ You evolved into ${EVOLUTION[w.evolvedTo].title}`, color: "#fff1b0" });
     if (w.streak > 0) lines.push({ text: `🔥 ${w.streak}-day streak` });
+    const c = s.campaign;
+    if (c.dayNumber >= 1 && c.dayNumber <= c.totalDays) lines.push({ text: `Day ${c.dayNumber} of ${c.totalDays} · ★ ${c.progress.fourWinsDays} Four Wins days` });
   }
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-navy-950/80 p-4 backdrop-blur-sm">
@@ -509,6 +537,50 @@ function PinLock() {
         <a href="/login" className="px-ghost mt-3 inline-block text-xs">
           Use password instead
         </a>
+      </div>
+    </div>
+  );
+}
+
+function campaignLabel(day: number, total: number) {
+  if (day < 1) return `Starts in ${1 - day}d`;
+  if (day > total) return "Journey complete";
+  return `Day ${day}/${total}`;
+}
+
+const CONFETTI_COLORS = ["#8f7cf0", "#e0794f", "#5fc4a4", "#f2c14e", "#fff1b0"];
+
+/** Full-screen moment for a complete Four Wins day (fireworks play in the world too). */
+function Celebration() {
+  const { celebration } = useGame();
+  if (!celebration) return null;
+  return (
+    <div className="pointer-events-none fixed inset-0 z-[55] overflow-hidden" data-testid="celebration" role="status" aria-live="assertive">
+      {Array.from({ length: 36 }, (_, i) => (
+        <span
+          key={i}
+          className="confetti absolute top-[-12px] block h-2.5 w-2"
+          style={{
+            left: `${(i * 37) % 100}%`,
+            background: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+            animationDelay: `${(i % 9) * 0.18}s`,
+            animationDuration: `${2.6 + (i % 5) * 0.35}s`,
+          }}
+        />
+      ))}
+      <div className="absolute inset-x-0 top-[22%] flex justify-center px-4">
+        <div className="px-panel celebrate-pop px-8 py-5 text-center !border-gold">
+          <div className="font-pixel text-4xl text-gold drop-shadow-[0_3px_0_#04061a] sm:text-5xl">FOUR WINS!</div>
+          <div className="font-pixel mt-1 text-lg">Day {celebration.day} complete</div>
+          <div className="mt-2 flex justify-center gap-2 text-2xl" aria-hidden>
+            {PILLARS.map((p) => (
+              <span key={p}>{PILLAR_META[p].icon}</span>
+            ))}
+          </div>
+          <div className="mt-2 text-sm text-cream-dim">
+            Victory lantern #{celebration.total} lit in the plaza
+          </div>
+        </div>
       </div>
     </div>
   );

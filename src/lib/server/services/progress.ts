@@ -1,5 +1,6 @@
 import "server-only";
 import { ACHIEVEMENTS_BY_KEY } from "@/lib/shared/achievements";
+import { EVOLUTION, STAGE_NAMES, dayNumber, progressOn, type CampaignProgress } from "@/lib/shared/campaign";
 import { VAULT_MILESTONES, pct } from "@/lib/shared/money";
 import { PILLARS, type Pillar } from "@/lib/shared/pillars";
 import { levelFromXp, overallProgress } from "@/lib/shared/progression";
@@ -8,6 +9,7 @@ import { localDate } from "@/lib/shared/time";
 import type { GameEvent } from "@/lib/shared/types";
 import { physiqueProgress, physiqueTier, unlockedKeys } from "@/lib/shared/unlocks";
 import type { Q, Sql, Tx } from "../db";
+import { campaignDays, getCampaign } from "./campaign";
 
 export interface Ctx {
   sql: Sql;
@@ -184,15 +186,38 @@ interface Facts {
   xp: Record<Pillar, number>;
   unlocks: Set<string>;
   achievements: Set<string>;
+  campaign: CampaignProgress;
+  dayNumber: number;
 }
 
-async function facts(q: Q, playerId: string): Promise<Facts> {
-  const [xp, unlocks, achievements] = await Promise.all([
+async function facts(q: Q, playerId: string, date: string): Promise<Facts> {
+  const campaign = await getCampaign(q, playerId);
+  const [xp, unlocks, achievements, days] = await Promise.all([
     pillarXp(q, playerId),
     q<{ key: string }[]>`select key from unlocks where player_id = ${playerId}`,
     q<{ key: string }[]>`select key from achievements where player_id = ${playerId}`,
+    campaignDays(q, playerId, campaign, date),
   ]);
-  return { xp, unlocks: new Set(unlocks.map((r) => r.key)), achievements: new Set(achievements.map((r) => r.key)) };
+  return {
+    xp,
+    unlocks: new Set(unlocks.map((r) => r.key)),
+    achievements: new Set(achievements.map((r) => r.key)),
+    campaign: progressOn(campaign, days, date),
+    dayNumber: dayNumber(campaign, date),
+  };
+}
+
+/** World growth events: decorations, building stages, Four Wins days, evolution. */
+function campaignEvents(before: Facts, after: Facts): GameEvent[] {
+  const events: GameEvent[] = [];
+  const [b, a] = [before.campaign, after.campaign];
+  for (const p of PILLARS) {
+    if (a.pillarDays[p] > b.pillarDays[p]) events.push({ type: "decoration", pillar: p, count: a.pillarDays[p] });
+    if (a.stages[p] > b.stages[p]) events.push({ type: "stage", pillar: p, stage: a.stages[p], name: STAGE_NAMES[p][a.stages[p]] });
+  }
+  if (a.fourWinsDays > b.fourWinsDays) events.push({ type: "fourwins", day: after.dayNumber, total: a.fourWinsDays });
+  if (a.tier > b.tier) events.push({ type: "evolve", tier: a.tier, title: EVOLUTION[a.tier].title });
+  return events;
 }
 
 function diffEvents(before: Facts, after: Facts): GameEvent[] {
@@ -207,7 +232,7 @@ function diffEvents(before: Facts, after: Facts): GameEvent[] {
   if (o1 > o0) events.push({ type: "levelup", pillar: "overall", level: o1 });
   for (const key of after.unlocks) if (!before.unlocks.has(key)) events.push({ type: "unlock", key });
   for (const key of after.achievements) if (!before.achievements.has(key)) events.push({ type: "achievement", key });
-  return events;
+  return [...events, ...campaignEvents(before, after)];
 }
 
 /**
@@ -220,10 +245,10 @@ export async function mutate(ctx: Ctx, fn: (tx: Tx) => Promise<GameEvent[] | voi
   return ctx.sql.begin(async (tx) => {
     const [player] = await tx`select id from players where id = ${ctx.playerId} for update`;
     if (!player) throw new Error("Player not found");
-    const before = await facts(tx, ctx.playerId);
+    const before = await facts(tx, ctx.playerId, today(ctx));
     const extra = (await fn(tx)) ?? [];
     await evaluateProgress(tx, ctx);
-    const after = await facts(tx, ctx.playerId);
+    const after = await facts(tx, ctx.playerId, today(ctx));
     return [...extra, ...diffEvents(before, after)];
   }) as Promise<GameEvent[]>;
 }

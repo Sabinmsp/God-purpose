@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ACHIEVEMENTS_BY_KEY } from "@/lib/shared/achievements";
+import { DECORATION_NAMES, EVOLUTION } from "@/lib/shared/campaign";
 import { PILLAR_META } from "@/lib/shared/pillars";
 import type { GameEvent, GameState, MutationResult } from "@/lib/shared/types";
 import { UNLOCKS_BY_KEY } from "@/lib/shared/unlocks";
@@ -11,7 +12,7 @@ import { ApiError, api } from "./api";
 
 export interface Toast {
   id: number;
-  kind: "xp" | "level" | "unlock" | "achievement" | "info" | "error" | "pr";
+  kind: "xp" | "level" | "unlock" | "achievement" | "info" | "error" | "pr" | "world";
   title: string;
   detail?: string;
   color?: string;
@@ -32,6 +33,8 @@ interface Store {
   toast: (t: Omit<Toast, "id">) => void;
   dismissToast: (id: number) => void;
   dismissWelcome: () => void;
+  /** Set for a few seconds after a complete Four Wins day. */
+  celebration: { day: number; total: number } | null;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -73,6 +76,11 @@ function eventToasts(events: GameEvent[]): Omit<Toast, "id">[] {
     if (e.type === "pr") out.push({ kind: "pr", title: `New personal record!`, detail: `${e.exercise}: ${e.weightKg} kg`, color: "#e0794f" });
     if (e.type === "cap")
       out.push({ kind: "info", title: "Daily XP cap reached", detail: `${PILLAR_META[e.pillar].name} is maxed for today. Rest is progress too.` });
+    if (e.type === "decoration")
+      out.push({ kind: "world", title: `${PILLAR_META[e.pillar].icon} Your ${DECORATION_NAMES[e.pillar]} grew`, detail: `${e.count} day${e.count === 1 ? "" : "s"} of ${PILLAR_META[e.pillar].name} wins this campaign.`, color: PILLAR_META[e.pillar].color });
+    if (e.type === "stage")
+      out.push({ kind: "unlock", title: `${PILLAR_META[e.pillar].world} upgraded`, detail: `It is now the ${e.name}.`, color: PILLAR_META[e.pillar].color });
+    if (e.type === "evolve") out.push({ kind: "level", title: `You evolved: ${e.title}`, detail: EVOLUTION[e.tier]?.description, color: "#f2c14e" });
   }
   return out;
 }
@@ -84,6 +92,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [panel, setPanel] = useState<PanelId | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [celebration, setCelebration] = useState<{ day: number; total: number } | null>(null);
   const stateRef = useRef<GameState | null>(null);
 
   const toast = useCallback((t: Omit<Toast, "id">) => {
@@ -137,7 +146,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (events.length) {
           bridge.emit("events", events);
           eventToasts(events).forEach(toast);
-          if (events.some((e) => e.type === "levelup")) play("levelup");
+          const fourWins = events.find((e) => e.type === "fourwins");
+          if (fourWins) {
+            setCelebration({ day: fourWins.day, total: fourWins.total });
+            setTimeout(() => setCelebration(null), 5200);
+            play("fanfare");
+          } else if (events.some((e) => e.type === "levelup" || e.type === "stage")) play("levelup");
           else if (events.some((e) => e.type === "unlock" || e.type === "achievement")) play("unlock");
           else if (events.some((e) => e.type === "action" && e.pillar === "financial")) play("coin");
           else if (events.some((e) => e.type === "xp")) play("complete");
@@ -196,12 +210,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setUnlocked: () => setLocked(false),
       toast,
       dismissToast,
+      celebration,
       dismissWelcome: () => {
         if (stateRef.current) apply({ ...stateRef.current, welcome: null });
         void api("/api/welcome/ack", { body: {} }).catch(() => {});
       },
     }),
-    [state, loading, locked, panel, dialog, toasts, openPanel, act, refresh, toast, dismissToast, apply],
+    [state, loading, locked, panel, dialog, toasts, celebration, openPanel, act, refresh, toast, dismissToast, apply],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

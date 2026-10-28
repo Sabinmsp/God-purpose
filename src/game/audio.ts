@@ -2,7 +2,7 @@
  * Tiny synthesized sound effects (WebAudio, no asset files). Every sound is
  * a few oscillator notes, so the game stays lightweight and works offline.
  */
-type Sfx = "click" | "complete" | "xp" | "levelup" | "coin" | "unlock" | "error" | "door" | "open";
+type Sfx = "click" | "complete" | "xp" | "levelup" | "coin" | "unlock" | "error" | "door" | "open" | "fanfare";
 
 let ctx: AudioContext | null = null;
 let muted = false;
@@ -71,6 +71,11 @@ export function play(sfx: Sfx) {
     case "levelup":
       [392, 523, 659, 784, 1047, 1319].forEach((f, i) => note(f, i * 0.08, 0.16, "square", 0.05));
       note(1568, 0.5, 0.4, "triangle", 0.05);
+      break;
+    case "fanfare":
+      [523, 659, 784, 1047].forEach((f, i) => note(f, i * 0.12, 0.18, "square", 0.05));
+      [784, 1047, 1319].forEach((f) => note(f, 0.55, 0.7, "triangle", 0.04));
+      [1568, 1319, 1568, 2093].forEach((f, i) => note(f, 1.1 + i * 0.1, 0.14, "triangle", 0.035));
       break;
     case "error":
       note(220, 0, 0.1, "sawtooth", 0.04);

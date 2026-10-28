@@ -1,6 +1,7 @@
 // Default world content for a brand-new player. No progress is assumed:
 // zero XP, empty vaults, no workouts. Every value here is editable in-game.
 import type postgres from "postgres";
+import { DEFAULT_CAMPAIGN } from "../../shared/campaign";
 
 type Seeder = postgres.ISql;
 
@@ -94,5 +95,11 @@ export async function seedPlayer(tx: Seeder, playerId: string, today: string) {
     insert into savings_goals (player_id, key, name, target_cents, start_date, sort_order) values
       (${playerId}, 'tuition', 'Tuition Vault', 1300000, ${today}, 0),
       (${playerId}, 'car', 'Car Vault', 1000000, ${today}, 1)
+  `;
+
+  await tx`
+    insert into campaigns (player_id, title, start_date, end_date)
+    values (${playerId}, ${DEFAULT_CAMPAIGN.title}, ${DEFAULT_CAMPAIGN.startDate}, ${DEFAULT_CAMPAIGN.endDate})
+    on conflict do nothing
   `;
 }

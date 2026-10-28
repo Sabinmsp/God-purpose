@@ -190,6 +190,57 @@ test("keyboard movement, interaction and the home scene", async ({ page }) => {
   expect((await state(page)).player.position.scene).toBe("home");
 });
 
+test("winning all four pillars grows the village, celebrates, and is recorded in the journey", async ({ page }) => {
+  await login(page);
+  // Stand in the village (the previous test ended inside the home).
+  await page.request.post("/api/player/position", {
+    headers: { origin: new URL(page.url()).origin },
+    data: { scene: "village", x: 512, y: 300, facing: "down" },
+  });
+  await page.reload();
+  await expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
+  const canvas = page.getByTestId("game-canvas");
+  const s0 = await state(page);
+  const wonToday = new Set(s0.today.quests.filter((q: { status: string }) => q.status === "done").map((q: { pillar: string }) => q.pillar));
+  expect(wonToday.size).toBeLessThan(4);
+  await expect(canvas).toHaveAttribute("data-decorations", String(wonToday.size));
+  await expect(canvas).toHaveAttribute("data-lanterns", "0");
+
+  await page.keyboard.press("q");
+  const board = page.getByRole("dialog", { name: "The Daily Four Wins" });
+  for (const pillar of ["mental", "physical", "spiritual", "financial"]) {
+    if (wonToday.has(pillar)) continue;
+    const quest = s0.today.quests.find((q: { pillar: string; status: string; autoOnly: boolean }) => q.pillar === pillar && q.status === "open" && !q.autoOnly);
+    await board.getByRole("button", { name: `Complete ${quest.title}`, exact: true }).click();
+    await expect(board.getByRole("button", { name: `Undo ${quest.title}`, exact: true })).toBeVisible();
+  }
+
+  // The celebration only appears once the fourth pillar is won.
+  await expect(page.getByTestId("celebration")).toContainText("FOUR WINS!");
+  await expect(page.getByTestId("celebration")).toContainText("Day 1 complete");
+  await page.keyboard.press("Escape");
+  await expect(canvas).toHaveAttribute("data-decorations", "4");
+  await expect(canvas).toHaveAttribute("data-lanterns", "1");
+
+  // Growth is stored, not cosmetic: it survives a reload.
+  await page.reload();
+  await expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
+  await expect(canvas).toHaveAttribute("data-lanterns", "1");
+  const s1 = await state(page);
+  expect(s1.campaign.progress).toMatchObject({ fourWinsDays: 1, tier: 1 });
+
+  // The journey timeline records the day and its visual upgrades.
+  await page.getByTestId("hud-campaign").click();
+  const journey = page.getByRole("dialog", { name: "75-Day Journey" });
+  await expect(journey.getByTestId("journey-day-number")).toHaveText("Day 1 of 75");
+  await expect(journey.getByTestId("journey-fourwins")).toContainText("1 Four Wins day");
+  await expect(journey.getByTestId("journey-day-1")).toHaveAccessibleName("Day 1, Four Wins");
+  await expect(journey.getByTestId("journey-changes")).toContainText("Victory lantern #1 lit in the plaza");
+  await expect(journey.getByTestId("journey-changes")).toContainText("You evolved into Initiate");
+  await journey.getByRole("tab", { name: "Before & after" }).click();
+  await expect(journey.getByTestId("before-after")).toBeVisible();
+});
+
 test("logout ends the session on the server", async ({ page }) => {
   await login(page);
   await page.getByRole("button", { name: "Settings" }).click();

@@ -1,4 +1,5 @@
 import "server-only";
+import { dayNumber, progressOn, totalDays } from "@/lib/shared/campaign";
 import { PILLARS, type Pillar } from "@/lib/shared/pillars";
 import { DAILY_PILLAR_XP_CAP, levelFromXp, levelProgress, overallProgress } from "@/lib/shared/progression";
 
@@ -11,6 +12,7 @@ import { listGoals } from "./goals";
 import { journalForDay } from "./journal";
 import { financeSummary, listSavings } from "./money";
 import { getPlayer, settingsOf } from "./player";
+import { campaignDays, getCampaign } from "./campaign";
 import { activeDays, levelsOf, pillarXp, streaksFrom, type Ctx } from "./progress";
 import { ensureBoard, listDaily, listDefinitions } from "./quests";
 
@@ -50,8 +52,9 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
   const clock = localClock(ctx.now);
   const date = clock.date;
   await ensureBoard(q, ctx.playerId, date);
+  const campaign = await getCampaign(q, ctx.playerId);
 
-  const [player, xp, quests, library, savings, finance, body, goals, journal, week, days, unlockRows, achievementRows, xpTodayRows, creds] =
+  const [player, xp, quests, library, savings, finance, body, goals, journal, week, days, unlockRows, achievementRows, xpTodayRows, creds, cDays] =
     await Promise.all([
       getPlayer(q, ctx.playerId),
       pillarXp(q, ctx.playerId),
@@ -74,6 +77,7 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
       q<{ pin_hash: string | null; password_weak: boolean }[]>`
         select pin_hash, password_weak from auth_credentials where player_id = ${ctx.playerId}
       `,
+      campaignDays(q, ctx.playerId, campaign, date),
     ]);
 
   const levels = levelsOf(xp);
@@ -108,6 +112,13 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
     },
     week: week.slice(-7),
     calendar: { month: date.slice(0, 7), days: week.filter((d) => d.date >= startOfMonth(date)) },
+    campaign: {
+      ...campaign,
+      totalDays: totalDays(campaign),
+      dayNumber: dayNumber(campaign, date),
+      days: cDays,
+      progress: progressOn(campaign, cDays, date),
+    },
     questLibrary: library,
     savings,
     finance,
@@ -140,6 +151,9 @@ export function snapshotOf(state: GameState, now: Date): ProgressSnapshot {
     achievements: state.achievements.map((a) => a.key),
     streak: state.stats.streak.current,
     physiqueTier: state.body.physiqueTier,
+    stages: state.campaign.progress.stages,
+    fourWinsDays: state.campaign.progress.fourWinsDays,
+    tier: state.campaign.progress.tier,
   };
 }
 
@@ -178,6 +192,14 @@ export function welcomeDiff(
     })),
     streak: cur.streak,
     physiqueChanged: Boolean(prev && cur.physiqueTier > prev.physiqueTier),
+    // Older snapshots predate the campaign: treat their missing fields as "no change".
+    stageUps: PILLARS.filter((p) => prev?.stages && (cur.stages?.[p] ?? 0) > prev.stages[p]).map((p) => ({
+      pillar: p,
+      from: prev!.stages![p],
+      to: cur.stages![p],
+    })),
+    fourWinsGained: prev?.fourWinsDays != null ? Math.max(0, (cur.fourWinsDays ?? 0) - prev.fourWinsDays) : 0,
+    evolvedTo: prev?.tier != null && (cur.tier ?? 0) > prev.tier ? (cur.tier ?? null) : null,
   };
 }
 

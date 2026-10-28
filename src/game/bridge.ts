@@ -10,7 +10,8 @@ export type PanelId =
   | "goals"
   | "achievements"
   | "settings"
-  | "guide";
+  | "guide"
+  | "journey";
 
 export interface Focus {
   id: string;
@@ -37,6 +38,8 @@ type Events = {
   position: [{ scene: "village" | "home"; x: number; y: number; facing: "up" | "down" | "left" | "right" }];
   scene: ["village" | "home"];
   ready: [];
+  /** Visible growth currently in the world (decorations, lanterns, building stages). */
+  world: [{ decorations: number; lanterns: number; stages: Record<string, number> }];
 };
 
 type Handler<K extends keyof Events> = (...args: Events[K]) => void;

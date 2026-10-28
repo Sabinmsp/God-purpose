@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { DECORATION_NAMES } from "@/lib/shared/campaign";
 import { formatAud } from "@/lib/shared/money";
 import { PILLAR_META, type Pillar } from "@/lib/shared/pillars";
 import type { GameEvent, GameState } from "@/lib/shared/types";
@@ -9,7 +10,7 @@ import type { Activity, Facing } from "../objects/Actor";
 import { Npc } from "../objects/Npc";
 import { Player } from "../objects/Player";
 import { DayNight } from "../systems/DayNight";
-import { burst, coinShower, floatText, levelUpFx, pillarColor } from "../systems/effects";
+import { burst, coinShower, fireworks, floatText, levelUpFx, pillarColor } from "../systems/effects";
 import type { InteractAction, Interactable } from "../world/village";
 
 const ACTIVITY_FOR: Record<Pillar, Activity> = {
@@ -229,6 +230,26 @@ export abstract class WorldScene extends Phaser.Scene {
           break;
         case "cap":
           floatText(this, x, y - 52, "Daily cap reached", 0xc9ced8, delay);
+          break;
+        case "decoration":
+          floatText(this, x, y - 52, `${DECORATION_NAMES[e.pillar]} grows`, pillarColor(e.pillar), delay + 400);
+          delay += 250;
+          break;
+        case "stage":
+          floatText(this, x, y - 64, `${e.name} unlocked`, pillarColor(e.pillar), delay + 900);
+          break;
+        case "fourwins":
+          levelled = true;
+          this.time.delayedCall(700, () => {
+            fireworks(this, this.player.x, this.player.y, "Four Wins!", `Day ${e.day} complete`, reduced);
+            this.player.doActivity("celebrate", 3200);
+          });
+          break;
+        case "evolve":
+          this.time.delayedCall(3200, () => {
+            levelUpFx(this, this.player.x, this.player.y, `You are ${e.title}`, 0xf2c14e, reduced);
+            this.player.doActivity("levelup", 2600);
+          });
           break;
       }
     }

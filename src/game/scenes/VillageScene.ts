@@ -1,10 +1,15 @@
 import * as Phaser from "phaser";
+import { STAGE_NAMES } from "@/lib/shared/campaign";
 import { carStage } from "@/lib/shared/money";
+import { PILLARS, type Pillar } from "@/lib/shared/pillars";
 import type { GameState } from "@/lib/shared/types";
+import { buildingKey, decorationKey } from "../art/registry";
 import { T, TILE } from "../art/tiles";
 import { bridge } from "../bridge";
 import type { Facing } from "../objects/Actor";
 import { Npc } from "../objects/Npc";
+import { burst, floatText, pillarColor } from "../systems/effects";
+import { PILLAR_BUILDING, worldStages } from "../world/growth";
 import { SPOTS, buildVillage } from "../world/village";
 import { WorldScene } from "./WorldScene";
 
@@ -58,14 +63,18 @@ export class VillageScene extends WorldScene {
     }
     for (const c of v.colliders) this.addSolid(c.x, c.y, c.w, c.h);
 
-    const place = (key: string, spot: { x: number; y: number }) => {
-      this.buildings[key] = this.add.image(spot.x, spot.y, key).setOrigin(0.5, 1).setDepth(spot.y);
-    };
-    place("home", SPOTS.home);
-    place("temple", SPOTS.temple);
-    place("arena", SPOTS.arena);
-    place("sanctuary", SPOTS.sanctuary);
-    place("bank", SPOTS.bank);
+    this.buildings.home = this.add.image(SPOTS.home.x, SPOTS.home.y, "home").setOrigin(0.5, 1).setDepth(SPOTS.home.y);
+    for (const p of PILLARS) {
+      const spot = SPOTS[PILLAR_BUILDING[p]];
+      this.buildings[p] = this.add.image(spot.x, spot.y, buildingKey(p, 0)).setOrigin(0.5, 1).setDepth(spot.y);
+    }
+    this.decorSlots = v.decorSlots as Record<Pillar, { x: number; y: number }[]>;
+    this.lanternSlots = v.lanternSlots;
+    this.decorations = { mental: [], physical: [], spiritual: [], financial: [] };
+    this.lanterns = [];
+    this.stageAuras = {};
+    this.shownStages = {};
+    this.live = false;
     this.buildings.vault = this.add.image(SPOTS.vault.x, SPOTS.vault.y, "vault-0").setOrigin(0.5, 1).setDepth(SPOTS.vault.y);
     this.buildings.garage = this.add.image(SPOTS.garage.x, SPOTS.garage.y, "garage-0").setOrigin(0.5, 1).setDepth(SPOTS.garage.y);
 
@@ -123,13 +132,102 @@ export class VillageScene extends WorldScene {
       .setDepth(9001);
   }
 
+  // ── Real-life growth ──────────────────────────────────────────────────
+  private decorSlots!: Record<Pillar, { x: number; y: number }[]>;
+  private lanternSlots: { x: number; y: number }[] = [];
+  private decorations!: Record<Pillar, Phaser.GameObjects.Image[]>;
+  private lanterns: { img: Phaser.GameObjects.Image; light: Phaser.GameObjects.Image }[] = [];
+  private stageAuras: Partial<Record<Pillar, Phaser.GameObjects.Particles.ParticleEmitter>> = {};
+  private shownStages: Partial<Record<Pillar, number>> = {};
+  /** False while applying the first state: growth that already existed appears without fanfare. */
+  private live = false;
+
+  /** Pops a new world object into place so the change is noticeable. */
+  private grow(obj: Phaser.GameObjects.Image) {
+    if (!this.live || this.player?.reducedMotion) return;
+    obj.setScale(0);
+    this.tweens.add({ targets: obj, scale: 1, duration: 520, ease: "Back.easeOut" });
+    burst(this, obj.x, obj.y - 6, "fx-spark", [0xfff1b0, 0xffffff], 10);
+  }
+
+  private syncGrowth(state: GameState) {
+    const progress = state.campaign.progress;
+    const stages = worldStages(state);
+
+    for (const p of PILLARS) {
+      const building = this.buildings[p];
+      const stage = stages[p];
+      if (this.shownStages[p] !== stage) {
+        const upgraded = this.live && this.shownStages[p] !== undefined && stage > this.shownStages[p]!;
+        building.setTexture(buildingKey(p, stage));
+        this.shownStages[p] = stage;
+        if (upgraded) this.celebrateBuilding(p, building);
+        this.stageAuras[p]?.destroy();
+        delete this.stageAuras[p];
+        if (stage >= 4) {
+          this.stageAuras[p] = this.add
+            .particles(building.x, building.y - building.height * 0.55, stage >= 5 ? "fx-spark" : "fx-dot", {
+              emitZone: { type: "random", source: new Phaser.Geom.Rectangle(-50, -40, 100, 70) } as never,
+              speedY: { min: -14, max: -4 },
+              lifespan: 1800,
+              frequency: stage >= 5 ? 160 : 360,
+              scale: { start: 1, end: 0 },
+              alpha: { start: 0.9, end: 0 },
+              tint: [pillarColor(p), 0xfff1b0],
+              blendMode: Phaser.BlendModes.ADD,
+            })
+            .setDepth(building.depth + 1);
+        }
+      }
+
+      // One decoration per real day won in this pillar.
+      const want = Math.min(progress.pillarDays[p], this.decorSlots[p].length);
+      const list = this.decorations[p];
+      while (list.length < want) {
+        const slot = this.decorSlots[p][list.length];
+        const img = this.add.image(slot.x, slot.y, decorationKey(p, list.length)).setOrigin(0.5, 1).setDepth(slot.y);
+        list.push(img);
+        this.grow(img);
+      }
+      while (list.length > want) list.pop()!.destroy();
+    }
+
+    // One victory lantern per complete Four Wins day.
+    const lanternsWanted = Math.min(progress.fourWinsDays, this.lanternSlots.length);
+    while (this.lanterns.length < lanternsWanted) {
+      const slot = this.lanternSlots[this.lanterns.length];
+      const img = this.add.image(slot.x, slot.y, "victory-lantern").setOrigin(0.5, 1).setDepth(slot.y);
+      const light = this.dayNight.addLight(slot.x, slot.y - 14, 46, "glow-gold");
+      this.lanterns.push({ img, light });
+      this.grow(img);
+    }
+    while (this.lanterns.length > lanternsWanted) {
+      const l = this.lanterns.pop()!;
+      l.img.destroy();
+      this.dayNight.removeLight(l.light);
+    }
+
+    if (this.petals) this.petals.frequency = stages.spiritual >= 5 ? 200 : stages.spiritual >= 3 ? 380 : 700;
+
+    bridge.emit("world", {
+      decorations: PILLARS.reduce((n, p) => n + this.decorations[p].length, 0),
+      lanterns: this.lanterns.length,
+      stages,
+    });
+    this.live = true;
+  }
+
+  private celebrateBuilding(p: Pillar, building: Phaser.GameObjects.Image) {
+    const reduced = this.player?.reducedMotion;
+    const y = building.y - building.height / 2;
+    building.setTintFill(0xffffff);
+    this.time.delayedCall(140, () => building.clearTint());
+    burst(this, building.x, y, "fx-spark", [pillarColor(p), 0xfff1b0, 0xffffff], 40, reduced);
+    floatText(this, building.x, building.y - building.height - 4, `${STAGE_NAMES[p][this.shownStages[p] ?? 0]}!`, pillarColor(p));
+  }
+
   protected onState(state: GameState) {
-    const has = (key: string) => state.unlocks.some((u) => u.key === key) && unlockedNow(state, key);
-    this.buildings.temple?.setTexture(has("master_temple") ? "temple-master" : "temple");
-    this.buildings.arena?.setTexture(has("champion_arena") ? "arena-champion" : "arena");
-    this.buildings.sanctuary?.setTexture(has("sacred_garden") ? "sanctuary-sacred" : "sanctuary");
-    this.buildings.bank?.setTexture(has("grand_treasury") ? "bank-grand" : "bank");
-    if (this.petals) this.petals.frequency = has("sacred_garden") ? 250 : 700;
+    this.syncGrowth(state);
 
     const tuition = state.savings.goals.find((g) => g.key === "tuition");
     const car = state.savings.goals.find((g) => g.key === "car");
@@ -137,16 +235,4 @@ export class VillageScene extends WorldScene {
     this.buildings.vault?.setTexture(`vault-${vaultLevel}`);
     this.buildings.garage?.setTexture(`garage-${car ? carStage(car.progress) : 0}`);
   }
-}
-
-/** Cosmetic world upgrades follow the current level (history rows are permanent). */
-function unlockedNow(state: GameState, key: string) {
-  const req: Record<string, ["mental" | "physical" | "spiritual" | "financial", number]> = {
-    master_temple: ["mental", 20],
-    champion_arena: ["physical", 20],
-    sacred_garden: ["spiritual", 20],
-    grand_treasury: ["financial", 20],
-  };
-  const r = req[key];
-  return r ? state.stats.pillars[r[0]].level >= r[1] : true;
 }

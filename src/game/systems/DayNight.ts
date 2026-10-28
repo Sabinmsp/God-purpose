@@ -79,6 +79,11 @@ export class DayNight {
     return img;
   }
 
+  removeLight(img: Phaser.GameObjects.Image) {
+    this.lights = this.lights.filter((l) => l !== img);
+    img.destroy();
+  }
+
   /** Forced hour for testing/screenshots; otherwise the real Darwin clock. */
   refresh(hourOverride?: number) {
     const hour = hourOverride ?? localClock().hourFloat;

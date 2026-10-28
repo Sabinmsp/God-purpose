@@ -258,6 +258,8 @@ export function buildVillage() {
     { id: "banker", look: "banker", name: "Banker Otto", x: 752, y: 580, wander: 30 },
   ];
 
+  const growth = growthSlots(ground, props, buildings.map((b) => b.tiles), r);
+
   const colliders = [
     ...props.filter((p) => p.collide).map((p) => ({ x: p.x, y: p.y - (p.collide!.oy ?? 0) - p.collide!.h / 2, w: p.collide!.w, h: p.collide!.h })),
     ...buildings.map((b) => ({ x: b.x, y: b.y - 6 - b.h / 2, w: b.w, h: b.h })),
@@ -265,7 +267,61 @@ export function buildVillage() {
     { x: 5.5 * TILE, y: 40.5 * TILE, w: 7 * TILE, h: 5 * TILE },
   ];
 
-  return { ground, props, interact, lights, npcs, colliders, width: W * TILE, height: H * TILE };
+  return { ground, props, interact, lights, npcs, colliders, width: W * TILE, height: H * TILE, ...growth };
+}
+
+export const MAX_GROWTH = 75;
+
+const NOT_GROWABLE = new Set<number>([T.PATH, T.PATH_PEBBLE, T.STONE, T.STONE_ALT, T.WATER_A, T.WATER_B, T.SHORE_A, T.SHORE_B, T.BRIDGE]);
+
+/**
+ * Where each district grows: one slot per day a pillar is won, filling
+ * outward from its building's door. Victory lanterns line the walkways
+ * around the plaza. Slots never sit on paths or water, so growth can't
+ * block movement (decorations have no collision).
+ */
+function growthSlots(ground: number[][], props: Prop[], buildingTiles: number[][], r: () => number) {
+  const free = (tx: number, ty: number) => {
+    if (ty < 1 || tx < 1 || ty >= VILLAGE_H - 1 || tx >= VILLAGE_W - 1) return false;
+    if (NOT_GROWABLE.has(ground[ty][tx])) return false;
+    if (buildingTiles.some(([x, y, w, h]) => tx >= x && tx < x + w && ty >= y && ty < y + h + 1)) return false;
+    const cx = tx * TILE + 8;
+    const cy = ty * TILE + 12;
+    return !props.some((p) => {
+      const tree = p.key.startsWith("tree-");
+      const halfW = tree ? 16 : 12;
+      return Math.abs(p.x - cx) < halfW && cy > p.y - (tree ? 40 : 18) && cy < p.y + 6;
+    });
+  };
+  const ordered = (cands: [number, number][], from: { x: number; y: number }) =>
+    cands
+      .map(([tx, ty]) => ({ x: tx * TILE + 8 + Math.round((r() - 0.5) * 6), y: ty * TILE + 12 + Math.round((r() - 0.5) * 4), d: Math.hypot(tx * TILE + 8 - from.x, ty * TILE + 8 - from.y) + r() * 24 }))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, MAX_GROWTH)
+      .map(({ x, y }) => ({ x, y }));
+
+  const regions: Record<string, { x0: number; y0: number; x1: number; y1: number; from: { x: number; y: number } }> = {
+    mental: { x0: 3, y0: 16, x1: 23, y1: 26, from: SPOTS.temple },
+    physical: { x0: 41, y0: 16, x1: 61, y1: 26, from: SPOTS.arena },
+    spiritual: { x0: 2, y0: 36, x1: 25, y1: 46, from: SPOTS.sanctuary },
+    financial: { x0: 37, y0: 36, x1: 61, y1: 46, from: SPOTS.bank },
+  };
+  const decorSlots: Record<string, { x: number; y: number }[]> = {};
+  for (const [pillar, g] of Object.entries(regions)) {
+    const cands: [number, number][] = [];
+    for (let ty = g.y0; ty < g.y1; ty++) for (let tx = g.x0; tx < g.x1; tx++) if (free(tx, ty)) cands.push([tx, ty]);
+    decorSlots[pillar] = ordered(cands, g.from);
+  }
+
+  const taken = new Set(Object.values(decorSlots).flat().map((s) => `${Math.floor(s.x / TILE)},${Math.floor(s.y / TILE)}`));
+  const isWalk = (tx: number, ty: number) => [T.PATH, T.PATH_PEBBLE, T.STONE, T.STONE_ALT].includes(ground[ty]?.[tx] as never);
+  const lanternCands: [number, number][] = [];
+  for (let ty = 8; ty < 40; ty++)
+    for (let tx = 14; tx < 50; tx++) {
+      if (!free(tx, ty) || taken.has(`${tx},${ty}`)) continue;
+      if (isWalk(tx + 1, ty) || isWalk(tx - 1, ty) || isWalk(tx, ty + 1) || isWalk(tx, ty - 1)) lanternCands.push([tx, ty]);
+    }
+  return { decorSlots, lanternSlots: ordered(lanternCands, SPOTS.fountain) };
 }
 
 export type VillageLayout = ReturnType<typeof buildVillage>;

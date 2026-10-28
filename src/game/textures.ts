@@ -1,11 +1,12 @@
 import * as Phaser from "phaser";
-import * as B from "./art/buildings";
 import { NPC_LOOKS, buildCharacter, type Look } from "./art/character";
+import { disciplineRing, fourCrest } from "./art/evolution";
 import { FONT_CELL, FONT_CHARS, buildFont } from "./art/font";
 import * as F from "./art/furniture";
 import * as X from "./art/fx";
 import { packFrames, type Pixels } from "./art/paint";
 import * as P from "./art/props";
+import { ANIMATED_PROPS, WORLD_ART } from "./art/registry";
 import { buildTileset } from "./art/tiles";
 
 export function addPixels(scene: Phaser.Scene, key: string, px: Pixels) {
@@ -47,50 +48,11 @@ function anim2(scene: Phaser.Scene, key: string, frames: Pixels[], rate: number)
 export function buildAllTextures(scene: Phaser.Scene) {
   addPixels(scene, "tiles", buildTileset());
 
-  // Buildings and their upgrade/progress variants
-  addPixels(scene, "home", B.home());
-  addPixels(scene, "temple", B.mindTemple(false));
-  addPixels(scene, "temple-master", B.mindTemple(true));
-  addPixels(scene, "arena", B.arena(false));
-  addPixels(scene, "arena-champion", B.arena(true));
-  addPixels(scene, "sanctuary", B.sanctuary(false));
-  addPixels(scene, "sanctuary-sacred", B.sanctuary(true));
-  addPixels(scene, "bank", B.bank(false));
-  addPixels(scene, "bank-grand", B.bank(true));
-  for (let s = 0; s <= 5; s++) addPixels(scene, `garage-${s}`, B.garage(s));
-  for (let l = 0; l <= 10; l++) addPixels(scene, `vault-${l}`, B.vault(l));
+  // Buildings (all evolution stages), props, decorations, victory lanterns
+  for (const [key, draw] of Object.entries(WORLD_ART)) if (!ANIMATED_PROPS.has(key)) addPixels(scene, key, draw());
+  addPixels(scene, "discipline-ring", disciplineRing());
+  addPixels(scene, "four-crest", fourCrest());
 
-  // Props
-  addPixels(scene, "tree-oak", P.tree("oak"));
-  addPixels(scene, "tree-pine", P.tree("pine"));
-  addPixels(scene, "tree-cherry", P.tree("cherry"));
-  addPixels(scene, "tree-knowledge", P.tree("knowledge"));
-  addPixels(scene, "tree-autumn", P.tree("autumn"));
-  addPixels(scene, "bush", P.bush());
-  addPixels(scene, "bush-berry", P.bush(true));
-  addPixels(scene, "rock", P.rock());
-  addPixels(scene, "stone-lantern", P.stoneLantern());
-  addPixels(scene, "lamp", P.lampPost());
-  addPixels(scene, "bench", P.bench());
-  addPixels(scene, "quest-board", P.questBoard());
-  addPixels(scene, "signpost", P.signpost());
-  addPixels(scene, "dumbbell-rack", P.dumbbellRack());
-  addPixels(scene, "dummy", P.dummy());
-  addPixels(scene, "barbell", P.barbell());
-  addPixels(scene, "stall-a", P.stall(["#d24b4b", "#f4efe4"]));
-  addPixels(scene, "stall-b", P.stall(["#3e7cc9", "#f2c14e"]));
-  addPixels(scene, "gate", P.gate());
-  addPixels(scene, "bamboo", P.bamboo());
-  addPixels(scene, "pot-red", P.flowerPot("#e05f5f"));
-  addPixels(scene, "pot-yellow", P.flowerPot("#f2c14e"));
-  addPixels(scene, "mailbox", P.mailbox());
-  addPixels(scene, "books", P.bookStack());
-  addPixels(scene, "tablet", P.tablet());
-  addPixels(scene, "lily", P.lilyPad());
-  addPixels(scene, "fence", P.fence());
-  addPixels(scene, "coin-pile", P.coinPile());
-  addPixels(scene, "money-bag", P.moneyBag());
-  addPixels(scene, "banner-red", P.banner("#d24b4b"));
   anim2(scene, "fountain", [P.fountain(0), P.fountain(1)], 3);
   anim2(scene, "waterfall", [P.waterfall(0), P.waterfall(1), P.waterfall(2)], 6);
   anim2(scene, "owl", [P.owl(0), P.owl(1)], 3);

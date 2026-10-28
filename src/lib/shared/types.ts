@@ -1,3 +1,4 @@
+import type { CampaignDay, CampaignInfo, CampaignProgress } from "./campaign";
 import type { Pillar } from "./pillars";
 import type { LevelProgress } from "./progression";
 import type { Equipped } from "./unlocks";
@@ -150,6 +151,9 @@ export interface ProgressSnapshot {
   achievements: string[];
   streak: number;
   physiqueTier: number;
+  stages?: Record<Pillar, number>;
+  fourWinsDays?: number;
+  tier?: number;
 }
 
 export interface WelcomeData {
@@ -162,6 +166,9 @@ export interface WelcomeData {
   vaults: { key: string; name: string; progress: number; deltaCents: number }[];
   streak: number;
   physiqueChanged: boolean;
+  stageUps: { pillar: Pillar; from: number; to: number }[];
+  fourWinsGained: number;
+  evolvedTo: number | null;
 }
 
 export interface DayProgress {
@@ -199,6 +206,12 @@ export interface GameState {
   week: DayProgress[];
   /** Current month up to today, for the habit calendar. */
   calendar: { month: string; days: DayProgress[] };
+  campaign: CampaignInfo & {
+    totalDays: number;
+    dayNumber: number;
+    days: CampaignDay[];
+    progress: CampaignProgress;
+  };
   questLibrary: QuestDefinition[];
   savings: {
     goals: SavingsGoalView[];
@@ -239,7 +252,11 @@ export type GameEvent =
   | { type: "achievement"; key: string }
   | { type: "pr"; exercise: string; weightKg: number }
   | { type: "cap"; pillar: Pillar }
-  | { type: "action"; pillar: Pillar };
+  | { type: "action"; pillar: Pillar }
+  | { type: "decoration"; pillar: Pillar; count: number }
+  | { type: "stage"; pillar: Pillar; stage: number; name: string }
+  | { type: "fourwins"; day: number; total: number }
+  | { type: "evolve"; tier: number; title: string };
 
 export interface MutationResult {
   ok: true;

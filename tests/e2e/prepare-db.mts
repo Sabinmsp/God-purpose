@@ -15,3 +15,9 @@ await sql.unsafe("drop schema public cascade; create schema public;");
 await sql.end();
 
 execFileSync("npx", ["tsx", "scripts/setup.ts"], { stdio: "inherit", env: { ...process.env } });
+
+// Start the e2e campaign today (Darwin) so the suite works whatever the real date is.
+const db = postgres(url, { max: 1, onnotice: () => {} });
+const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Australia/Darwin" }).format(new Date());
+await db`update campaigns set start_date = ${today}, end_date = ${today}::date + 74`;
+await db.end();

@@ -53,6 +53,55 @@ export class Player extends Actor {
   private lastSaved = { x: 0, y: 0, facing: "down" };
   private saveTimer = 0;
   reducedMotion = false;
+  // Character evolution layers (driven by complete Four Wins days).
+  private tier = -1;
+  private ring?: Phaser.GameObjects.Image;
+  private crest?: Phaser.GameObjects.Image;
+  private evoGlow?: Phaser.GameObjects.Image;
+  private evoSparks?: Phaser.GameObjects.Particles.ParticleEmitter;
+
+  /** Builds the evolution layers for a tier (see EVOLUTION in lib/shared/campaign). */
+  private applyEvolution(tier: number) {
+    if (tier === this.tier) return;
+    this.tier = tier;
+    for (const o of [this.ring, this.crest, this.evoGlow, this.evoSparks]) o?.destroy();
+    this.ring = this.crest = this.evoGlow = undefined;
+    this.evoSparks = undefined;
+    if (tier >= 1) {
+      this.ring = this.scene.add
+        .image(this.x, this.y, "discipline-ring")
+        .setOrigin(0.5, 0.6)
+        .setTint(tier >= 2 ? 0xf2c14e : 0xc9ced8)
+        .setAlpha(tier >= 2 ? 0.85 : 0.55);
+      if (tier >= 5) this.ring.setBlendMode(Phaser.BlendModes.ADD);
+    }
+    if (tier >= 3) {
+      this.evoSparks = this.scene.add.particles(0, 0, "fx-spark", {
+        follow: this.sprite,
+        followOffset: { x: 0, y: -16 },
+        emitZone: { type: "random", source: new Phaser.Geom.Circle(0, 0, 14) } as never,
+        speedY: { min: -18, max: -8 },
+        lifespan: 1100,
+        frequency: tier >= 5 ? 180 : 420,
+        scale: { start: 0.6, end: 0 },
+        alpha: { start: 0.9, end: 0 },
+        tint: [0xfff1b0, 0xf2c14e],
+        blendMode: Phaser.BlendModes.ADD,
+      });
+      this.evoSparks.setDepth(99997);
+    }
+    if (tier >= 4) this.crest = this.scene.add.image(this.x, this.y - 40, "four-crest");
+    if (tier >= 5) {
+      this.evoGlow = this.scene.add.image(this.x, this.y - 14, "glow-gold").setBlendMode(Phaser.BlendModes.ADD).setDisplaySize(52, 52).setAlpha(0.35);
+    }
+  }
+
+  private syncEvolution(time: number) {
+    this.ring?.setPosition(this.x, this.y).setDepth(this.y - 2);
+    this.ring?.setVisible(this.activity !== "sleep");
+    this.evoGlow?.setPosition(this.x, this.y - 14).setDepth(this.y - 1);
+    this.crest?.setPosition(this.x, this.y - 40 + Math.round(Math.sin(time / 300) * 2)).setDepth(this.y + 2);
+  }
 
   constructor(
     scene: Phaser.Scene,
@@ -77,6 +126,7 @@ export class Player extends Actor {
     this.fallbackKey = art.classic;
     if (art.main !== this.textureKey) this.setTextureKey(art.main);
     this.reducedMotion = state.player.settings.reducedMotion;
+    this.applyEvolution(state.campaign.progress.tier);
 
     const aura = state.player.equipped.aura;
     if (aura !== this.auraKey) {
@@ -160,6 +210,7 @@ export class Player extends Actor {
     }
     this.animateMove(moving, running);
     this.syncShadow();
+    this.syncEvolution(this.scene.time.now);
 
     if (this.companion) {
       const tx = this.x + (this.facing === "left" ? 16 : -16);
@@ -189,6 +240,7 @@ export class Player extends Actor {
     this.aura?.destroy();
     this.fireflies?.destroy();
     this.companion?.destroy();
+    for (const o of [this.ring, this.crest, this.evoGlow, this.evoSparks]) o?.destroy();
     super.destroy();
   }
 }
