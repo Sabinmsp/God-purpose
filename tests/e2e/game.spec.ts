@@ -278,7 +278,7 @@ test("Four Wins AI: talk to the NPC, chat, approve a mission, manage memory, che
   await page.route("**/api/ai/chat", async (route) => {
     if (route.request().method() !== "POST") return route.continue();
     sentBody = route.request().postDataJSON();
-    await new Promise((r) => setTimeout(r, 400));
+    await new Promise((r) => setTimeout(r, 1500));
     await route.fulfill({
       json: {
         ok: true,
@@ -335,6 +335,39 @@ test("Four Wins AI: talk to the NPC, chat, approve a mission, manage memory, che
   expect(JSON.stringify(settings)).not.toContain("130.84");
   await panel.getByTestId("location-toggle").click();
   await expect(panel.getByTestId("location-check")).toHaveCount(0);
+});
+
+test("one-page HUD: attributes, hotbar and a wellbeing check-in that persists", async ({ page }) => {
+  await login(page);
+  const s = await state(page);
+  const bar = page.getByTestId("character-bar");
+  await expect(bar).toBeVisible();
+  await expect(bar.getByRole("button", { name: `Intelligence ${s.stats.missionsDone.mental}`, exact: true })).toBeVisible();
+  await expect(bar.getByRole("button", { name: `Strength ${s.stats.missionsDone.physical}`, exact: true })).toBeVisible();
+  await expect(page.getByTestId("hotbar").getByRole("button", { name: /Backpack/ })).toBeVisible();
+
+  // The AI chat opens as a window beside the player and starts with today's brief.
+  await page.getByRole("button", { name: "Four Wins AI", exact: true }).click();
+  const chat = page.getByRole("dialog", { name: "Four Wins AI" });
+  await expect(chat.getByTestId("ai-brief")).toContainText(`Day ${s.campaign.dayNumber} of your 75-day journey`);
+  await chat.getByRole("button", { name: "Close", exact: true }).click();
+
+  const card = page.getByTestId("wellbeing");
+  await expect(card.getByTestId("wellbeing-sleepMinutes")).toHaveText("—");
+  await card.getByRole("button", { name: /Check in/ }).click();
+  await card.getByLabel("🌙 Sleep (hours)").fill("7.5");
+  await card.getByRole("radiogroup", { name: "⚡ Energy" }).getByRole("radio", { name: "4" }).click();
+  await card.getByRole("radiogroup", { name: "🙂 Mood" }).getByRole("radio", { name: "🙂" }).click();
+  await card.getByRole("button", { name: "Save check-in" }).click();
+  await expect(card.getByTestId("wellbeing-sleepMinutes")).toHaveText("7.5h");
+  await expect(card.getByTestId("wellbeing-energy")).toHaveText("4/5");
+  await expect(card.getByTestId("wellbeing-mood")).toHaveText("4/5");
+
+  await page.reload();
+  await expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("wellbeing").getByTestId("wellbeing-sleepMinutes")).toHaveText("7.5h");
+  const after = await state(page);
+  expect(after.stats.overall.totalXp).toBe(s.stats.overall.totalXp);
 });
 
 test("logout ends the session on the server", async ({ page }) => {

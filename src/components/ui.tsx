@@ -31,6 +31,7 @@ export function Sheet({
   onClose,
   children,
   wide = false,
+  variant = "drawer",
 }: {
   title: string;
   subtitle?: string;
@@ -39,7 +40,10 @@ export function Sheet({
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  /** "float": a chat-sized window beside the player on larger screens (full screen on phones). */
+  variant?: "drawer" | "float";
 }) {
+  const float = variant === "float";
   const id = useId();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -53,17 +57,21 @@ export function Sheet({
     };
   }, [onClose]);
   return (
-    <div className="fixed inset-0 z-40 flex justify-end" role="presentation">
-      <button aria-label="Close panel" className="absolute inset-0 bg-navy-950/40 md:bg-navy-950/20" onClick={onClose} tabIndex={-1} />
+    <div className={float ? "fixed inset-0 z-40 md:pointer-events-none md:absolute" : "fixed inset-0 z-40 flex justify-end"} role="presentation">
+      <button aria-label="Close panel" className={`absolute inset-0 bg-navy-950/40 ${float ? "md:hidden" : "md:bg-navy-950/20"}`} onClick={onClose} tabIndex={-1} />
       <section
         ref={ref}
         tabIndex={-1}
         role="dialog"
-        aria-modal="true"
+        aria-modal={!float}
         aria-labelledby={id}
-        className={`px-panel anim-slide relative flex h-full w-full flex-col outline-none md:m-3 md:h-[calc(100%-1.5rem)] ${wide ? "md:w-[min(720px,60vw)]" : "md:w-[min(520px,46vw)]"}`}
+        className={
+          float
+            ? "px-panel anim-pop relative flex h-full w-full flex-col outline-none md:pointer-events-auto md:absolute md:right-3 md:top-[max(5.5rem,calc(50%-310px))] md:h-[min(620px,calc(100%-11rem))] md:w-[400px] xl:left-[calc(50%+64px)] xl:right-auto"
+            : `px-panel anim-slide relative flex h-full w-full flex-col outline-none md:m-3 md:h-[calc(100%-1.5rem)] ${wide ? "md:w-[min(720px,60vw)]" : "md:w-[min(520px,46vw)]"}`
+        }
       >
-        <header className="flex items-center gap-3 border-b-2 border-[#04061a] px-4 py-3" style={{ boxShadow: `inset 0 -3px 0 ${accent}` }}>
+        <header className={`flex items-center gap-3 border-b-2 border-[#04061a] ${float ? "px-3 py-2.5" : "px-4 py-3"}`} style={{ boxShadow: `inset 0 -3px 0 ${accent}` }}>
           {icon && <span className="text-2xl" aria-hidden>{icon}</span>}
           <div className="min-w-0 flex-1">
             <h2 id={id} className="font-pixel truncate text-xl" style={{ color: accent }}>
@@ -75,7 +83,7 @@ export function Sheet({
             ✕
           </button>
         </header>
-        <div className="scrollbar-thin flex-1 overflow-y-auto px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">{children}</div>
+        <div className={`scrollbar-thin flex-1 overflow-y-auto pb-[max(1rem,env(safe-area-inset-bottom))] ${float ? "px-3 pt-3" : "px-4 pt-4"}`}>{children}</div>
       </section>
     </div>
   );
@@ -147,18 +155,19 @@ export function PillarChip({ pillar, level, pct, onClick }: { pillar: Pillar; le
   return (
     <button
       onClick={onClick}
-      className="group flex min-w-0 items-center gap-1.5 rounded border-2 border-[#04061a] bg-navy-900/85 px-1.5 py-1 text-left backdrop-blur hover:bg-navy-800"
+      className="group flex min-w-0 items-center gap-1.5 rounded border-2 border-[#04061a] bg-navy-900/90 px-1.5 py-1 text-left shadow-[inset_0_0_0_1px_var(--navy-700),0_3px_0_#04061a] backdrop-blur hover:bg-navy-800 lg:gap-2 lg:px-2 lg:py-1.5"
       aria-label={`${m.name} level ${level}`}
       title={`${m.name} — ${m.world}`}
     >
-      <span className="text-base leading-none" aria-hidden>
+      <span className="text-base leading-none lg:text-xl" aria-hidden>
         {m.icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="font-pixel block whitespace-nowrap text-[11px] leading-none" style={{ color: m.color }}>
+        <span className="hidden whitespace-nowrap text-xs font-bold leading-none text-cream lg:block">{m.name}</span>
+        <span className="font-pixel block whitespace-nowrap text-[11px] leading-none lg:mt-0.5 lg:text-xs" style={{ color: m.color }}>
           LV {level}
         </span>
-        <Bar value={pct} color={m.color} className="mt-1 !h-[7px] w-9 !border sm:w-12" />
+        <Bar value={pct} color={m.color} className="mt-1 !h-[7px] w-9 !border sm:w-12 lg:w-14" />
       </span>
     </button>
   );

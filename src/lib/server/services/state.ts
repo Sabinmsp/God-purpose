@@ -15,6 +15,7 @@ import { getPlayer, settingsOf } from "./player";
 import { campaignDays, getCampaign } from "./campaign";
 import { activeDays, levelsOf, pillarXp, streaksFrom, type Ctx } from "./progress";
 import { ensureBoard, listDaily, listDefinitions } from "./quests";
+import { wellbeingSummary } from "./wellbeing";
 
 /** A new "visit" starts when the game is opened after this long away. */
 const VISIT_GAP_MS = 30 * 60 * 1000;
@@ -54,7 +55,7 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
   await ensureBoard(q, ctx.playerId, date);
   const campaign = await getCampaign(q, ctx.playerId);
 
-  const [player, xp, quests, library, savings, finance, body, goals, journal, week, days, unlockRows, achievementRows, xpTodayRows, creds, cDays] =
+  const [player, xp, quests, library, savings, finance, body, goals, journal, week, days, unlockRows, achievementRows, xpTodayRows, creds, cDays, doneRows, wellbeing] =
     await Promise.all([
       getPlayer(q, ctx.playerId),
       pillarXp(q, ctx.playerId),
@@ -78,6 +79,10 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
         select pin_hash, password_weak from auth_credentials where player_id = ${ctx.playerId}
       `,
       campaignDays(q, ctx.playerId, campaign, date),
+      q<{ pillar: Pillar; n: number }[]>`
+        select pillar, count(*)::int as n from daily_quests where player_id = ${ctx.playerId} and status = 'done' group by pillar
+      `,
+      wellbeingSummary(q, ctx.playerId, date),
     ]);
 
   const levels = levelsOf(xp);
@@ -101,7 +106,9 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
       overall: overallProgress(xp),
       streak: streaks.all,
       pillarStreaks: streaks.perPillar,
+      missionsDone: Object.fromEntries(PILLARS.map((p) => [p, doneRows.find((r) => r.pillar === p)?.n ?? 0])) as Record<Pillar, number>,
     },
+    wellbeing,
     today: {
       quests,
       xpToday: Object.fromEntries(PILLARS.map((p) => [p, Math.max(0, xpTodayRows.find((r) => r.pillar === p)?.xp ?? 0)])) as Record<Pillar, number>,

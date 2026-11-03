@@ -6,6 +6,7 @@ import { formatAud } from "@/lib/shared/money";
 import { PILLARS, PILLAR_META } from "@/lib/shared/pillars";
 import { formatLongDate } from "@/lib/shared/time";
 import type { GameState } from "@/lib/shared/types";
+import { WELLBEING_FIELDS, WELLBEING_META, formatWellbeing } from "@/lib/shared/wellbeing";
 
 /**
  * Builds the per-turn <game_data> block from stored records only. Nothing here
@@ -60,6 +61,16 @@ export function buildAiContext(
     );
   }
   lines.push(`This month: income ${formatAud(s.finance.incomeCents)}, spending ${formatAud(s.finance.expenseCents)} (transfers excluded).`);
+
+  const w = s.wellbeing.today;
+  lines.push(
+    "",
+    w
+      ? `Wellbeing check-in today (self-reported): ${WELLBEING_FIELDS.filter((f) => w[f] != null)
+          .map((f) => `${WELLBEING_META[f].label.toLowerCase()} ${formatWellbeing(f, w[f])}`)
+          .join(", ")}.`
+      : "Wellbeing check-in today: not logged.",
+  );
 
   lines.push("", `Training: ${s.body.workoutsThisWeek} workouts this week, ${s.body.workoutsTotal} total.${s.body.latest?.weightKg ? ` Latest weigh-in ${s.body.latest.weightKg} kg on ${s.body.latest.date}.` : ""}${s.body.targetWeightKg ? ` Body-weight target ${s.body.targetWeightKg} kg.` : ""}`);
 

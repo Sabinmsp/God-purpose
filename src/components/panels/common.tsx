@@ -12,9 +12,11 @@ import { UNLOCKS } from "@/lib/shared/unlocks";
 import { Bar, Field, useBusy } from "../ui";
 
 /** Renders procedural pixel art (the same art the game world uses). */
-export function PixelArt({ draw, scale = 2, className = "", label }: { draw: () => Pixels; scale?: number; className?: string; label?: string }) {
+export function PixelArt({ draw, scale = 2, fit, className = "", label }: { draw: () => Pixels; scale?: number; fit?: number; className?: string; label?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const px = useMemo(() => draw(), [draw]);
+  // `fit` shrinks large art so its longest side stays within that many CSS pixels.
+  const s = fit ? Math.min(scale, fit / Math.max(px.w, px.h)) : scale;
   useEffect(() => {
     const ctx = ref.current!.getContext("2d")!;
     ctx.clearRect(0, 0, px.w, px.h);
@@ -26,7 +28,7 @@ export function PixelArt({ draw, scale = 2, className = "", label }: { draw: () 
       width={px.w}
       height={px.h}
       className={className}
-      style={{ width: px.w * scale, height: px.h * scale }}
+      style={{ width: px.w * s, height: px.h * s }}
       role={label ? "img" : undefined}
       aria-label={label}
     />

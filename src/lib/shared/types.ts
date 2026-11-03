@@ -2,6 +2,7 @@ import type { CampaignDay, CampaignInfo, CampaignProgress } from "./campaign";
 import type { Pillar } from "./pillars";
 import type { LevelProgress } from "./progression";
 import type { Equipped } from "./unlocks";
+import type { WellbeingView } from "./wellbeing";
 
 export type QuestStatus = "open" | "done" | "skipped" | "moved";
 
@@ -194,7 +195,11 @@ export interface GameState {
     overall: LevelProgress & { totalXp: number };
     streak: { current: number; best: number; activeToday: boolean };
     pillarStreaks: Record<Pillar, number>;
+    /** All-time completed missions per pillar (the INT/STR/WIS/WEA attributes). */
+    missionsDone: Record<Pillar, number>;
   };
+  /** Self-reported Brain & Wellbeing check-ins. */
+  wellbeing: { today: WellbeingView | null; recent: WellbeingView[] };
   today: {
     quests: DailyQuest[];
     xpToday: Record<Pillar, number>;

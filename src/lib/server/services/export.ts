@@ -22,6 +22,7 @@ export async function exportPlayerData(q: Q, playerId: string) {
     "ai_memories",
     "ai_messages",
     "ai_proposals",
+    "wellbeing_checkins",
   ] as const;
   const [player] = await q`
     select id, display_name, character_class, starting_age, created_at, pos_scene, pos_x, pos_y, facing, equipped, settings

@@ -12,6 +12,11 @@ Nothing is earned by opening the game. XP, levels, unlocks and vault balances co
 - **Real records → automatic quest wins** — logging a workout, a personal record, a measurement, an expense, a vault deposit, gratitude notes, a reflection or a learning note completes the matching quest once per day.
 - **Wealth Kingdom** — Tuition Vault (A$13,000, coin pile fills) and Car Vault (A$10,000, car builds at 10/25/50/75/100%), deposits, withdrawals, reconcile-to-bank-balance, income/expense/transfer tracking.
 - **Strength Arena** — workout journal with sets, PR detection, weigh-ins, weight trend, physique tier.
+- **One-page HUD** — on a laptop or desktop everything sits around the world at once:
+  - **Top:** player and pillar cards (top-left); date, campaign day and streak (top-right).
+  - **Right column:** the Daily Four, **Brain & Wellbeing**, and an item hotbar of what you've unlocked.
+  - **Bottom:** a character bar with INT/STR/WIS/WEA (all-time missions completed per pillar), and an optional location card.
+  - **Brain & Wellbeing** is a private daily check-in (sleep, energy, mood, focus, distraction minutes). It never awards XP. The AI companion sees it as self-reported data.
 - **Goals & calendar**, **trophy room**, **home that upgrades** with furniture as you level, **day/night on Australia/Darwin time**, **welcome-back screen** showing what changed since your last visit, and **The Guide**, which answers five questions using only your stored records (no AI subscription needed).
 
 ## Run it locally

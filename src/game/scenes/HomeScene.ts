@@ -63,6 +63,7 @@ function has(s: GameState, key: string) {
 
 export class HomeScene extends WorldScene {
   readonly sceneName = "home" as const;
+  protected viewSize = { w: 300, h: 220 };
   private items: Record<string, Phaser.GameObjects.Image> = {};
   private from?: string;
 

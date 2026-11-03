@@ -17,19 +17,19 @@ import {
   type AiStatus,
   type MemoryCategory,
 } from "@/lib/shared/ai";
-import { checkLocation, LocationError, permissionState, type Coordinates } from "@/lib/location/geolocation";
+import { getLocation, setLocation, useLocation } from "@/client/location";
+import { checkLocation, LocationError, permissionState } from "@/lib/location/geolocation";
 import { PLACE_LABELS } from "@/lib/location/places";
+import { dailyBrief } from "@/lib/shared/brief";
 import { PILLAR_META } from "@/lib/shared/pillars";
+import { localDate } from "@/lib/shared/time";
 import type { GameEvent, GameState } from "@/lib/shared/types";
 import { Empty, Field, Section, Sheet, Tabs, useBusy } from "../ui";
 import { PixelArt } from "./common";
 
-// Coordinates live only in memory for this tab; they are never saved anywhere.
-let lastLocation: Coordinates | null = null;
-
 const drawBot = () => aiBot(0);
 
-function BotAvatar({ size = 1.5 }: { size?: number }) {
+export function BotAvatar({ size = 1.5 }: { size?: number }) {
   return (
     <div className="shrink-0 rounded bg-navy-950 p-0.5">
       <PixelArt draw={drawBot} scale={size} label="Four Wins AI" />
@@ -47,6 +47,73 @@ function Thinking() {
         <span>.</span>
         <span>.</span>
       </span>
+    </div>
+  );
+}
+
+/** Today's opening card: computed from your records, not written by the model. */
+function DailyBriefCard() {
+  const s = useGameState();
+  const b = dailyBrief(s);
+  const names = (ps: typeof b.wonToday) => {
+    const n = ps.map((p) => PILLAR_META[p].name);
+    return n.length > 1 ? `${n.slice(0, -1).join(", ")} and ${n[n.length - 1]}` : n.join("");
+  };
+  return (
+    <div className="flex gap-2" data-testid="ai-brief">
+      <BotAvatar />
+      <div className="px-card min-w-0 flex-1 space-y-2 px-3 py-2.5 text-sm leading-snug">
+        <p>
+          {b.greeting} 👋
+          {b.journey && (
+            <>
+              <br />
+              {b.journey}
+            </>
+          )}
+        </p>
+        {b.yesterday && (
+          <div>
+            {b.yesterday.length ? (
+              <>
+                <p>Yesterday you won:</p>
+                <ul className="mt-0.5">
+                  {b.yesterday.map((p) => (
+                    <li key={p}>
+                      <span className="mr-1 inline-grid h-4 w-4 place-items-center rounded-sm bg-forest-light text-[10px] text-white">✓</span>
+                      {PILLAR_META[p].name} Win
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="text-cream-dim">Yesterday: no wins logged. Today is a fresh start.</p>
+            )}
+          </div>
+        )}
+        <p>
+          {b.wonToday.length === 4
+            ? "All four pillars are won today — Four Wins! 🏮"
+            : b.openToday.length
+              ? `${names(b.openToday)} ${b.openToday.length === 1 ? "is" : "are"} still open today.`
+              : b.wonToday.length
+                ? `${names(b.wonToday)} won today.`
+                : "No missions on today's board yet."}
+        </p>
+        {b.focus.length > 0 && (
+          <div>
+            <p className="font-pixel text-[#5ff0e0]">🎯 Today&apos;s focus:</p>
+            <ul className="ml-4 list-disc">
+              {b.focus.map((f) => (
+                <li key={f.pillar}>
+                  {f.title} <span style={{ color: PILLAR_META[f.pillar].color }}>+{f.xp}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <p className="text-[11px] text-cream-faint">Daily brief · from your records</p>
+      </div>
     </div>
   );
 }
@@ -108,6 +175,41 @@ function ProposalCard({ p, onDecide }: { p: AiProposalView; onDecide: (p: AiProp
   );
 }
 
+function Message({
+  m,
+  proposals,
+  onDecide,
+}: {
+  m: AiMessageView;
+  proposals: AiProposalView[];
+  onDecide: (p: AiProposalView, decision: "approve" | "dismiss", repeat?: boolean) => Promise<void>;
+}) {
+  if (m.role === "user") {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[85%] whitespace-pre-wrap rounded border-2 border-[#04061a] bg-navy-700 px-3 py-2 text-sm" data-testid="ai-user-message">
+          {m.content}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex gap-2">
+      <BotAvatar />
+      <div className="min-w-0 max-w-[90%]">
+        <div className="px-card whitespace-pre-wrap px-3 py-2 text-sm leading-relaxed" data-testid="ai-reply">
+          {m.content}
+        </div>
+        {proposals
+          .filter((p) => p.messageId === m.id)
+          .map((p) => (
+            <ProposalCard key={p.id} p={p} onDecide={onDecide} />
+          ))}
+      </div>
+    </div>
+  );
+}
+
 function ChatTab({
   status,
   messages,
@@ -133,7 +235,8 @@ function ChatTab({
   const [error, setError] = useState<{ message: string; text: string } | null>(null);
   const [shareLocation, setShareLocation] = useState(false);
   const end = useRef<HTMLDivElement>(null);
-  const canShare = s.player.settings.locationAwareness && lastLocation !== null;
+  const location = useLocation();
+  const canShare = s.player.settings.locationAwareness && location !== null;
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
@@ -146,9 +249,9 @@ function ChatTab({
     setError(null);
     setDraft("");
     try {
-      const location = shareLocation && lastLocation ? approximate(lastLocation.lat, lastLocation.lon) : null;
+      const here = getLocation();
       const res = await api<{ messages: AiMessageView[]; proposals: AiProposalView[]; status: AiStatus }>("/api/ai/chat", {
-        body: { message, location },
+        body: { message, location: shareLocation && here ? approximate(here.lat, here.lon) : null },
       });
       setMessages((m) => [...m, ...res.messages]);
       setProposals((p) => [...res.proposals, ...p]);
@@ -166,54 +269,34 @@ function ChatTab({
 
   if (status && !status.configured) {
     return (
-      <div className="px-card p-4" data-testid="ai-not-configured">
-        <div className="mb-2 flex items-center gap-3">
-          <BotAvatar />
-          <p className="font-pixel text-gold">Four Wins AI is sleeping</p>
+      <div className="space-y-3">
+        <DailyBriefCard />
+        <div className="px-card p-4" data-testid="ai-not-configured">
+          <p className="font-pixel mb-1 text-gold">💤 Chat is sleeping</p>
+          <p className="text-sm text-cream-dim">
+            The AI companion needs an AI key on the server before it can chat. Add <code className="text-cream">ANTHROPIC_API_KEY</code> to the server environment (for local
+            development, in <code className="text-cream">.env.local</code>) and restart the game. Keys stay on the server and are never sent to your browser.
+          </p>
+          <p className="mt-2 text-sm text-cream-dim">Until then, The Guide in the plaza can still answer questions from your records.</p>
         </div>
-        <p className="text-sm text-cream-dim">
-          The AI companion needs an AI key on the server before it can chat. Add <code className="text-cream">ANTHROPIC_API_KEY</code> to the server environment (for local
-          development, in <code className="text-cream">.env.local</code>) and restart the game. Keys stay on the server and are never sent to your browser.
-        </p>
-        <p className="mt-2 text-sm text-cream-dim">Until then, The Guide in the plaza can still answer questions from your records.</p>
       </div>
     );
   }
 
+  // Today's brief sits where today's conversation begins.
+  const firstToday = messages.findIndex((m) => localDate(new Date(m.createdAt)) === s.now.date);
+  const briefAt = firstToday === -1 ? messages.length : firstToday;
+
   return (
-    <div className="flex h-full min-h-[60vh] flex-col">
+    <div className="flex min-h-full flex-col">
       <div className="flex-1 space-y-3" aria-live="polite" data-testid="ai-messages">
-        {messages.length === 0 && !pending && (
-          <div className="flex gap-2">
-            <BotAvatar />
-            <div className="px-card px-3 py-2 text-sm">
-              Hi {s.player.name}! I can see your missions, levels, streaks, campaign and vaults — and only what you&apos;ve actually logged. Ask me anything, or pick a question below.
-            </div>
-          </div>
-        )}
-        {messages.map((m) =>
-          m.role === "user" ? (
-            <div key={m.id} className="flex justify-end">
-              <div className="max-w-[85%] whitespace-pre-wrap rounded border-2 border-[#04061a] bg-navy-700 px-3 py-2 text-sm" data-testid="ai-user-message">
-                {m.content}
-              </div>
-            </div>
-          ) : (
-            <div key={m.id} className="flex gap-2">
-              <BotAvatar />
-              <div className="min-w-0 max-w-[90%]">
-                <div className="px-card whitespace-pre-wrap px-3 py-2 text-sm leading-relaxed" data-testid="ai-reply">
-                  {m.content}
-                </div>
-                {proposals
-                  .filter((p) => p.messageId === m.id)
-                  .map((p) => (
-                    <ProposalCard key={p.id} p={p} onDecide={onDecide} />
-                  ))}
-              </div>
-            </div>
-          ),
-        )}
+        {messages.slice(0, briefAt).map((m) => (
+          <Message key={m.id} m={m} proposals={proposals} onDecide={onDecide} />
+        ))}
+        <DailyBriefCard />
+        {messages.slice(briefAt).map((m) => (
+          <Message key={m.id} m={m} proposals={proposals} onDecide={onDecide} />
+        ))}
         {pending && (
           <>
             <div className="flex justify-end">
@@ -416,7 +499,7 @@ function LocationTab() {
   const s = useGameState();
   const { act } = useGame();
   const enabled = s.player.settings.locationAwareness;
-  const [coords, setCoords] = useState<Coordinates | null>(lastLocation);
+  const coords = useLocation();
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
   const [permission, setPermission] = useState<string>("unknown");
@@ -429,19 +512,14 @@ function LocationTab() {
     setChecking(true);
     setError("");
     try {
-      const c = await checkLocation();
-      lastLocation = c;
-      setCoords(c);
+      setLocation(await checkLocation());
     } catch (err) {
       setError(err instanceof LocationError ? err.message : "Couldn't get your location.");
     } finally {
       setChecking(false);
     }
   };
-  const forget = () => {
-    lastLocation = null;
-    setCoords(null);
-  };
+  const forget = () => setLocation(null);
 
   return (
     <>
@@ -562,7 +640,7 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
   }, []);
 
   return (
-    <Sheet title="Four Wins AI" subtitle="Your companion — reads your real progress, changes nothing without your OK" icon={<BotAvatar size={1} />} accent="#5ff0e0" onClose={onClose} wide>
+    <Sheet title="Four Wins AI" subtitle="Your Personal Guide" icon={<BotAvatar size={1} />} accent="#5ff0e0" onClose={onClose} variant="float">
       <Tabs
         tabs={[
           { id: "chat", label: "Chat" },

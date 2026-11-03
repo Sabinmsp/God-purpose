@@ -95,9 +95,12 @@ export abstract class WorldScene extends Phaser.Scene {
     bridge.emit("focus", null);
   }
 
+  /** Minimum world area (px) kept in view; the camera zooms by whole steps to fit it. */
+  protected viewSize = { w: 420, h: 330 };
+
   protected fitZoom() {
     const { width, height } = this.scale;
-    const zoom = Phaser.Math.Clamp(Math.floor(Math.min(width / 300, height / 220)), 2, 5);
+    const zoom = Phaser.Math.Clamp(Math.floor(Math.min(width / this.viewSize.w, height / this.viewSize.h)), 2, 5);
     this.cameras.main.setZoom(zoom);
   }
 

@@ -9,7 +9,6 @@ import { ACHIEVEMENTS_BY_KEY } from "@/lib/shared/achievements";
 import { EVOLUTION, STAGE_NAMES } from "@/lib/shared/campaign";
 import { formatAud } from "@/lib/shared/money";
 import { PILLARS, PILLAR_META } from "@/lib/shared/pillars";
-import { localClock } from "@/lib/shared/time";
 import { UNLOCKS_BY_KEY } from "@/lib/shared/unlocks";
 import { AiPanel } from "./panels/Ai";
 import { JourneyPanel } from "./panels/Journey";
@@ -18,8 +17,10 @@ import { MindPanel, SanctuaryPanel } from "./panels/MindSpirit";
 import { QuestBoardPanel } from "./panels/QuestBoard";
 import { StrengthPanel } from "./panels/Strength";
 import { WealthPanel } from "./panels/Wealth";
+import { Hotbar, Hud } from "./Hud";
 import { QuestRow } from "./quests";
-import { Bar, PillarChip, Portrait } from "./ui";
+import { WellbeingCard } from "./panels/Wellbeing";
+import { Bar, Portrait } from "./ui";
 
 export default function GameApp() {
   return (
@@ -47,6 +48,7 @@ function Shell() {
             <Hud />
             <FocusPrompt />
             <TouchControls />
+            <AiHost />
           </>
         )}
         {(loading || !state) && !locked && <Loading />}
@@ -124,104 +126,36 @@ function GameCanvas() {
   );
 }
 
-function useDarwinClock() {
-  const [clock, setClock] = useState(() => localClock());
-  useEffect(() => {
-    const t = setInterval(() => setClock(localClock()), 20_000);
-    return () => clearInterval(t);
-  }, []);
-  return clock;
-}
-
-function Hud() {
-  const s = useGameState();
-  const { openPanel } = useGame();
-  const clock = useDarwinClock();
-  const time = `${String(clock.hour).padStart(2, "0")}:${String(clock.minute).padStart(2, "0")}`;
-  const dateLabel = new Date(`${clock.date}T00:00:00Z`).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+function SidePanel() {
   return (
-    <>
-      <div className="pointer-events-none absolute left-2 right-2 top-2 z-20 flex items-start justify-between gap-2 pt-[env(safe-area-inset-top)]">
-        <div className="pointer-events-auto flex min-w-0 flex-col gap-1.5">
-          <button className="px-panel flex items-center gap-2 !rounded-md px-2 py-1.5 text-left" onClick={() => openPanel("profile")} aria-label="Open character profile">
-            <div className="rounded bg-navy-950">
-              <Portrait equipped={s.player.equipped} tier={s.body.physiqueTier} size={40} art={s.player.settings.characterArt} />
-            </div>
-            <div className="min-w-0">
-              <div className="font-pixel truncate leading-tight" data-testid="hud-name">
-                {s.player.name}
-              </div>
-              <div className="font-pixel text-xs text-gold" data-testid="hud-level">
-                LV {s.stats.overall.level} · {EVOLUTION[s.campaign.progress.tier].title}
-              </div>
-              <Bar value={s.stats.overall.pct} className="mt-1 !h-2 w-28" label="Overall XP" />
-            </div>
-          </button>
-          <div className="flex gap-1">
-            {PILLARS.map((p) => (
-              <PillarChip key={p} pillar={p} level={s.stats.pillars[p].level} pct={s.stats.pillars[p].pct} onClick={() => openPanel(p)} />
-            ))}
-          </div>
-        </div>
-        <div className="pointer-events-auto flex flex-col items-end gap-1.5">
-          <div className="px-panel !rounded-md px-2.5 py-1 text-right">
-            <div className="font-pixel text-sm leading-tight">
-              {dateLabel} · {time}
-            </div>
-            <div className="font-pixel text-xs text-gold" title="Current streak — rest days never break it">
-              🔥 {s.stats.streak.current} day streak
-            </div>
-          </div>
-          <button
-            className="px-panel font-pixel !rounded-md px-2.5 py-1 text-right text-xs hover:brightness-110"
-            onClick={() => (play("click"), openPanel("journey"))}
-            aria-label="Open the 75-day journey"
-            data-testid="hud-campaign"
-          >
-            <span className="text-cream">{campaignLabel(s.campaign.dayNumber, s.campaign.totalDays)}</span>
-            <span className="ml-2 text-gold">★ {s.campaign.progress.fourWinsDays}</span>
-            <Bar value={Math.max(0, Math.min(s.campaign.dayNumber, s.campaign.totalDays)) / s.campaign.totalDays} className="mt-1 !h-1.5 w-full !border" />
-          </button>
-          <nav className="flex flex-col gap-1 sm:flex-row" aria-label="Menus">
-            {(
-              [
-                ["quests", "📜", "Daily quests (Q)"],
-                ["journey", "🗺️", "75-day journey"],
-                ["ai", "🤖", "Four Wins AI"],
-                ["goals", "🗓️", "Goals & calendar"],
-                ["achievements", "🏆", "Trophies"],
-                ["settings", "⚙️", "Settings"],
-              ] as const
-            ).map(([id, icon, label]) => (
-              <button key={id} className="px-btn secondary !h-9 !w-9 !p-0 text-lg" onClick={() => (play("click"), openPanel(id))} aria-label={label} title={label}>
-                {icon}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </div>
-    </>
+    <aside className="hidden w-[340px] shrink-0 flex-col gap-3 border-l-4 border-[#04061a] bg-navy-950 p-3 lg:flex" aria-label="Today">
+      <DailyFour />
+      <WellbeingCard />
+      <Hotbar />
+    </aside>
   );
 }
 
-function SidePanel() {
+function DailyFour() {
   const s = useGameState();
   const { openPanel } = useGame();
   const done = s.today.quests.filter((q) => q.status === "done").length;
   return (
-    <aside className="scrollbar-thin hidden w-[330px] shrink-0 flex-col gap-3 overflow-y-auto border-l-4 border-[#04061a] bg-navy-900 p-3 lg:flex" aria-label="Today">
+    <section className="px-panel scrollbar-thin flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-3" aria-labelledby="daily-four-title">
       <div className="flex items-center justify-between">
-        <h2 className="font-pixel text-lg text-gold">The Daily Four</h2>
-        <button className="px-ghost text-xs" onClick={() => openPanel("quests")}>
+        <h2 id="daily-four-title" className="font-pixel whitespace-nowrap text-lg text-gold">
+          The Daily Four
+        </h2>
+        <button className="px-ghost whitespace-nowrap text-xs" onClick={() => openPanel("quests")}>
           Open board →
         </button>
       </div>
-      <div className="text-xs text-cream-dim">
-        {done} won today · {PILLARS.reduce((a, p) => a + s.today.xpToday[p], 0)} XP · 🔥 {s.stats.streak.current}
+      <div className="font-pixel -mt-1 text-xs text-cream-dim">
+        {done} won today · {PILLARS.reduce((a, p) => a + s.today.xpToday[p], 0)} XP · 🔥 {s.stats.streak.current} · ★ {s.campaign.progress.fourWinsDays}
       </div>
       {PILLARS.map((p) => (
         <section key={p}>
-          <h3 className="font-pixel mb-1 text-xs" style={{ color: PILLAR_META[p].color }}>
+          <h3 className="font-pixel mb-1 text-sm" style={{ color: PILLAR_META[p].color }}>
             {PILLAR_META[p].icon} {PILLAR_META[p].name.toUpperCase()}
           </h3>
           <ul className="space-y-1">
@@ -231,22 +165,19 @@ function SidePanel() {
                 <QuestRow key={q.id} q={q} compact />
               ))}
           </ul>
+          {p === "financial" &&
+            s.savings.goals.map((g) => (
+              <button key={g.id} className="mt-1.5 block w-full px-1 text-left" onClick={() => openPanel("financial")} aria-label={`${g.name} ${Math.floor(g.progress * 100)}%`}>
+                <div className="flex justify-between text-xs text-cream-dim">
+                  <span>{g.name}</span>
+                  <span>{Math.floor(g.progress * 100)}%</span>
+                </div>
+                <Bar value={g.progress} color="#f2c14e" className="mt-0.5 !h-1.5 !border" />
+              </button>
+            ))}
         </section>
       ))}
-      <section className="px-card p-2">
-        <h3 className="font-pixel mb-1 text-xs text-gold">💰 VAULTS</h3>
-        {s.savings.goals.map((g) => (
-          <button key={g.id} className="block w-full text-left" onClick={() => openPanel("financial")}>
-            <div className="flex justify-between text-xs">
-              <span>{g.name}</span>
-              <span className="text-cream-dim">{Math.floor(g.progress * 100)}%</span>
-            </div>
-            <Bar value={g.progress} color="#f2c14e" className="mb-1 mt-0.5 !h-2" />
-          </button>
-        ))}
-      </section>
-      <p className="mt-auto text-[11px] text-cream-faint">WASD/arrows move · Shift run · E interact · Q quests</p>
-    </aside>
+    </section>
   );
 }
 
@@ -274,13 +205,17 @@ function PanelHost() {
       return <SettingsPanel onClose={close} />;
     case "journey":
       return <JourneyPanel onClose={close} />;
-    case "ai":
-      return <AiPanel onClose={close} />;
     case "guide":
       return <GuidePanel onClose={close} />;
     default:
       return null;
   }
+}
+
+/** Four Wins AI floats beside the player, so it lives inside the world container. */
+function AiHost() {
+  const { panel, openPanel } = useGame();
+  return panel === "ai" ? <AiPanel onClose={() => openPanel(null)} /> : null;
 }
 
 function DialogBox() {
@@ -332,7 +267,7 @@ function FocusPrompt() {
   useEffect(() => bridge.on("focus", setFocus), []);
   if (!focus || panel || dialog) return null;
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-24 z-20 flex justify-center md:bottom-6">
+    <div className="pointer-events-none absolute inset-x-0 bottom-24 z-20 flex justify-center md:bottom-28">
       <button
         className="px-panel font-pixel pointer-events-auto flex items-center gap-2 !rounded-md px-3 py-2 anim-pop"
         onClick={() => bridge.emit("interact")}
@@ -544,12 +479,6 @@ function PinLock() {
       </div>
     </div>
   );
-}
-
-function campaignLabel(day: number, total: number) {
-  if (day < 1) return `Starts in ${1 - day}d`;
-  if (day > total) return "Journey complete";
-  return `Day ${day}/${total}`;
 }
 
 const CONFETTI_COLORS = ["#8f7cf0", "#e0794f", "#5fc4a4", "#f2c14e", "#fff1b0"];

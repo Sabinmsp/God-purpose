@@ -1,8 +1,9 @@
 import * as Phaser from "phaser";
 import { STAGE_NAMES } from "@/lib/shared/campaign";
 import { carStage } from "@/lib/shared/money";
-import { PILLARS, type Pillar } from "@/lib/shared/pillars";
+import { PILLARS, PILLAR_META, type Pillar } from "@/lib/shared/pillars";
 import type { GameState } from "@/lib/shared/types";
+import { STAGE_TOP } from "../art/evolution";
 import { buildingKey, decorationKey } from "../art/registry";
 import { T, TILE } from "../art/tiles";
 import { play } from "../audio";
@@ -77,6 +78,14 @@ export class VillageScene extends WorldScene {
     this.stageAuras = {};
     this.shownStages = {};
     this.live = false;
+    this.plates = {};
+    const roof = (img: Phaser.GameObjects.Image, headroom: number) => img.y - (img.height - headroom) * 0.66;
+    this.makePlate(SPOTS.home.x, roof(this.buildings.home, 0), "Home", null, 0xf2c14e);
+    for (const p of PILLARS) {
+      const b = this.buildings[p];
+      this.plates[p] = this.makePlate(b.x, roof(b, STAGE_TOP), STAGE_NAMES[p][0], PILLAR_META[p].name, pillarColor(p));
+    }
+    this.makePlate(SPOTS.ai.x - 14, SPOTS.ai.y - 66, "Four Wins AI", "Your guide", 0x5ff0e0);
     this.buildings.vault = this.add.image(SPOTS.vault.x, SPOTS.vault.y, "vault-0").setOrigin(0.5, 1).setDepth(SPOTS.vault.y);
     this.buildings.garage = this.add.image(SPOTS.garage.x, SPOTS.garage.y, "garage-0").setOrigin(0.5, 1).setDepth(SPOTS.garage.y);
 
@@ -97,6 +106,35 @@ export class VillageScene extends WorldScene {
     // Warm house and temple windows at night.
     for (const [x, y] of [[490, 200], [530, 200], [240, 200], [176, 200], [208, 520], [232, 520]]) this.dayNight.addLight(x, y, 36, "glow-warm");
     this.cameras.main.fadeIn(250, 11, 16, 48);
+  }
+
+  private plates: Partial<Record<Pillar, (title: string) => void>> = {};
+
+  /**
+   * Name sign floating over a place. It sits above the night overlay so it
+   * stays readable after dark. Returns a setter for the title.
+   */
+  private makePlate(x: number, top: number, title: string, sub: string | null, accent: number) {
+    const bg = this.add.graphics();
+    const head = this.add.bitmapText(0, 4, "pixel", "").setOrigin(0.5, 0).setLetterSpacing(-1).setTint(0xfff1b0);
+    const tail = sub ? this.add.bitmapText(0, 13, "pixel", sub.toUpperCase()).setOrigin(0.5, 0).setLetterSpacing(-1).setTint(accent) : null;
+    const h = sub ? 26 : 17;
+    const set = (text: string) => {
+      head.setText(text.toUpperCase());
+      const w = Math.ceil(Math.max(head.width, tail?.width ?? 0) / 2) * 2 + 10;
+      bg.clear()
+        .fillStyle(0x04061a, 1)
+        .fillRoundedRect(-w / 2 - 1, -1, w + 2, h + 3, 3)
+        .fillStyle(0x0b1030, 0.94)
+        .fillRoundedRect(-w / 2, 0, w, h, 2)
+        .lineStyle(1, accent, 0.85)
+        .strokeRoundedRect(-w / 2 + 1.5, 1.5, w - 3, h - 3, 2);
+    };
+    set(title);
+    this.add
+      .container(Math.round(x), Math.round(top), tail ? [bg, head, tail] : [bg, head])
+      .setDepth(200010);
+    return set;
   }
 
   /** Four Wins AI: click/tap opens the chat; a bobbing bubble shows it can talk. */
@@ -176,6 +214,7 @@ export class VillageScene extends WorldScene {
         const upgraded = this.live && this.shownStages[p] !== undefined && stage > this.shownStages[p]!;
         building.setTexture(buildingKey(p, stage));
         this.shownStages[p] = stage;
+        this.plates[p]?.(STAGE_NAMES[p][stage]);
         if (upgraded) this.celebrateBuilding(p, building);
         this.stageAuras[p]?.destroy();
         delete this.stageAuras[p];
