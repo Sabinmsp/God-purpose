@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/client/api";
 import { GameProvider, useGame, useGameState } from "@/client/store";
+import { useView } from "@/client/view";
 import { play } from "@/game/audio";
 import { bridge, touchInput, type Focus } from "@/game/bridge";
 import { ACHIEVEMENTS_BY_KEY } from "@/lib/shared/achievements";
@@ -18,6 +19,7 @@ import { QuestBoardPanel } from "./panels/QuestBoard";
 import { StrengthPanel } from "./panels/Strength";
 import { WealthPanel } from "./panels/Wealth";
 import { Hotbar, Hud } from "./Hud";
+import { TodayApp } from "./Today";
 import { QuestRow } from "./quests";
 import { WellbeingCard } from "./panels/Wellbeing";
 import { Bar, Portrait } from "./ui";
@@ -39,21 +41,30 @@ function Shell() {
     document.documentElement.classList.toggle("reduced-motion", state.player.settings.reducedMotion);
   }, [state]);
 
+  const view = useView();
+  // The world (and its Phaser canvas) only mounts when it is on screen, so the
+  // today view stays light on battery.
+  const world = view === "world";
+
   return (
     <main className="fixed inset-0 flex overflow-hidden bg-navy-950">
-      <div className="relative min-w-0 flex-1">
-        <GameCanvas />
-        {state && (
-          <>
-            <Hud />
-            <FocusPrompt />
-            <TouchControls />
-            <AiHost />
-          </>
-        )}
-        {(loading || !state) && !locked && <Loading />}
-      </div>
-      {state && sidePanel && <SidePanel />}
+      {state && view === "today" ? (
+        <TodayApp />
+      ) : (
+        <div className="relative min-w-0 flex-1">
+          {world && <GameCanvas />}
+          {state && world && (
+            <>
+              <Hud />
+              <FocusPrompt />
+              <TouchControls />
+              <AiHost />
+            </>
+          )}
+          {(loading || !state || !view) && !locked && <Loading />}
+        </div>
+      )}
+      {state && world && sidePanel && <SidePanel />}
       {state && <PanelHost />}
       {state && <DialogBox />}
       {state?.welcome && <WelcomeBack />}

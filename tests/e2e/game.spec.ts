@@ -2,12 +2,16 @@ import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
 import { E2E_PASSWORD } from "../../playwright.config";
 
-async function login(page: Page) {
+const worldReady = (page: Page) => expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
+
+/** Phones open on the calm Today view; larger screens open in the world. */
+async function login(page: Page, opens: "world" | "today" = "world") {
   await page.goto("/login");
   await page.getByLabel("Access password").fill(E2E_PASSWORD);
   await page.getByRole("button", { name: /Enter the world/ }).click();
   await page.waitForURL("/");
-  await expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
+  if (opens === "world") await worldReady(page);
+  else await expect(page.getByTestId("today-app")).toBeVisible({ timeout: 30_000 });
   const welcome = page.getByTestId("welcome");
   if (await welcome.isVisible().catch(() => false)) await welcome.getByRole("button").click();
   await expect(page.getByTestId("welcome")).toBeHidden();
@@ -132,8 +136,19 @@ test("first visit: welcome screen, real progress, and persistence", async ({ pag
 test("another device sees the same character, goals, balances and unlocks", async ({ browser }) => {
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   const page = await phone.newPage();
-  await login(page);
+  await login(page, "today");
   const s = await state(page);
+
+  // Today view: the wins ring matches the server, one next step, no horizontal scroll.
+  const wonPillars = new Set(s.today.quests.filter((q: { status: string }) => q.status === "done").map((q: { pillar: string }) => q.pillar));
+  await expect(page.getByTestId("today-wins")).toHaveAttribute("aria-label", `${wonPillars.size} of 4`);
+  await expect(page.getByTestId("next-step")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole("button", { name: "Progress" }).click();
+  await expect(page.getByText(`Level ${s.stats.overall.level}`)).toBeVisible();
+  // The pixel world is one tap away.
+  await page.getByRole("button", { name: "World" }).click();
+  await worldReady(page);
   expect(s.stats.pillars.mental.xp).toBe(20);
   expect(s.savings.goals.find((g: { key: string }) => g.key === "tuition").balanceCents).toBe(130001);
   expect(s.today.quests.find((q: { title: string }) => q.title === "Read for 20 minutes").status).toBe("done");

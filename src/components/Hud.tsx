@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { setView } from "@/client/view";
 import { useGame, useGameState } from "@/client/store";
 import { setLocation, useLocation } from "@/client/location";
 import type { Pixels } from "@/game/art/paint";
@@ -132,6 +133,9 @@ function NavBar() {
   const { openPanel } = useGame();
   return (
     <nav className="flex flex-col gap-1 sm:flex-row lg:gap-1.5" aria-label="Menus">
+      <button className="px-btn secondary !h-9 !w-9 !p-0 text-lg lg:!h-11 lg:!w-11 lg:text-xl" onClick={() => (play("click"), setView("today"))} aria-label="Today view" title="Today view" data-testid="to-today">
+        ◉
+      </button>
       {MENUS.map(([id, icon, label]) => (
         <button key={id} className="px-btn secondary !h-9 !w-9 !p-0 text-lg lg:!h-11 lg:!w-11 lg:text-xl" onClick={() => (play("click"), openPanel(id))} aria-label={label} title={label}>
           {icon}

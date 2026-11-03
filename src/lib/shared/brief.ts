@@ -1,6 +1,6 @@
 import { PILLARS, type Pillar } from "./pillars";
 import { addDays } from "./time";
-import type { GameState } from "./types";
+import type { DailyQuest, GameState } from "./types";
 
 /** Opening card of the AI chat, built only from stored records (no model call). */
 export interface DailyBrief {
@@ -38,4 +38,28 @@ export function dailyBrief(s: GameState): DailyBrief {
     openToday,
     focus,
   };
+}
+
+/** Which pillars suit each part of the day (cheap rules, no model call). */
+const TIME_ORDER: Record<"morning" | "afternoon" | "evening", Pillar[]> = {
+  morning: ["mental", "spiritual", "physical", "financial"],
+  afternoon: ["physical", "mental", "financial", "spiritual"],
+  evening: ["financial", "spiritual", "mental", "physical"],
+};
+
+/**
+ * Open quests ranked as "your next step": pillars not yet won today first,
+ * ordered by time of day, quests you can tick yourself before ones that
+ * complete from a log. Empty when nothing is left.
+ */
+export function nextSteps(s: GameState): DailyQuest[] {
+  const part = s.now.hour < 12 ? "morning" : s.now.hour < 17 ? "afternoon" : "evening";
+  const order = TIME_ORDER[part];
+  const won = new Set(s.today.quests.filter((q) => q.status === "done").map((q) => q.pillar));
+  const rank = (q: DailyQuest) => (won.has(q.pillar) ? 10 : 0) + order.indexOf(q.pillar) + (q.autoOnly ? 0.5 : 0);
+  return s.today.quests
+    .filter((q) => q.status === "open" && !(s.today.rest.physical && q.pillar === "physical"))
+    .map((q, i) => ({ q, r: rank(q), i }))
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .map((x) => x.q);
 }
