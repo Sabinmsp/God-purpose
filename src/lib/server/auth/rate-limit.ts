@@ -28,6 +28,8 @@ export function ipBucket(ip: string): string {
   return "ip:" + createHmac("sha256", authSecret()).update(ip).digest("hex").slice(0, 32);
 }
 
+export type AttemptKind = "password" | "pin" | "totp";
+
 export type LimitCheck = { allowed: true } | { allowed: false; retryAfterSec: number; scope: "ip" | "global" };
 
 async function failuresSince(sql: Q, bucket: string, kind: string, since: Date) {
@@ -39,7 +41,7 @@ async function failuresSince(sql: Q, bucket: string, kind: string, since: Date) 
   return row;
 }
 
-export async function checkLoginLimit(sql: Q, bucket: string, kind: "password" | "pin", now = new Date()): Promise<LimitCheck> {
+export async function checkLoginLimit(sql: Q, bucket: string, kind: AttemptKind, now = new Date()): Promise<LimitCheck> {
   const checks = [
     { scope: "ip" as const, bucket, ...LIMITS.ip },
     { scope: "global" as const, bucket: "global", ...LIMITS.global },
@@ -55,7 +57,7 @@ export async function checkLoginLimit(sql: Q, bucket: string, kind: "password" |
   return { allowed: true };
 }
 
-export async function recordLoginAttempt(sql: Q, bucket: string, kind: "password" | "pin", success: boolean, now = new Date()) {
+export async function recordLoginAttempt(sql: Q, bucket: string, kind: AttemptKind, success: boolean, now = new Date()) {
   await sql`
     insert into login_attempts (bucket, kind, success, created_at)
     values (${bucket}, ${kind}, ${success}, ${now})

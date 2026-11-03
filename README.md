@@ -76,6 +76,7 @@ tests/                 unit · integration (real DB) · e2e (Playwright)
 - Server-side password check (scrypt, constant-time compare); the raw password never reaches code, env vars, `NEXT_PUBLIC_*`, localStorage or Git.
 - Sessions: random 256-bit token, only its SHA-256 stored; `HttpOnly`, `SameSite=Strict`, `Secure` + `__Host-` prefix in production; 30-day absolute and 7-day idle expiry; logout revokes server-side.
 - Login rate limits stored in Postgres (hold across all serverless instances): 5 failures per IP per 15 min, 20 failures across all IPs per hour.
+- Optional two-factor login (Settings → Security): scan a QR code with any authenticator app (TOTP, RFC 6238). With it on, the password alone never opens a session. Codes are checked on the server, each code works once (replays are refused), wrong codes are rate-limited like passwords, and turning it on signs out other devices. The secret is AES-256-GCM encrypted with a key derived from `AUTH_SECRET`. The 10 one-time recovery codes are stored only as SHA-256 hashes. Lost your phone and your recovery codes? Run `npm run setup -- --reset-2fa` against the database.
 - Optional PIN: with a PIN set, sessions idle for 12 h lock and require the PIN; 5 wrong PINs revoke the session.
 - CSRF: mutating requests require a same-origin `Origin` header and a JSON body, plus SameSite=Strict cookies.
 - Every API route validates the session and scopes every query by player. Bodies are validated with Zod, and the server never trusts client-sent XP or balances.
@@ -109,6 +110,8 @@ rm .env.production.local
 
 vercel deploy --prod
 ```
+
+On every production deploy, `vercel-build` applies any pending SQL migrations before `next build`, so schema changes ship with the code. Preview deploys never migrate.
 
 Then open the production URL, log in, complete a quest, close the browser, and log in on your phone. Your character, quests, balances and unlocks will be there.
 

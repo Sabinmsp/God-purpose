@@ -7,20 +7,38 @@ import { PILLARS, PILLAR_META } from "@/lib/shared/pillars";
 
 export default function LoginForm() {
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  // The password stays in component memory only while the code is asked for.
+  const [needsCode, setNeedsCode] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const restart = () => {
+    setNeedsCode(false);
+    setPassword("");
+    setCode("");
+    setError("");
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (busy || !password) return;
+    if (busy || !password || (needsCode && !code.trim())) return;
     setBusy(true);
     setError("");
     try {
-      await api("/api/auth/login", { body: { password } });
+      await api("/api/auth/login", { body: needsCode ? { password, code: code.trim() } : { password } });
       window.location.replace("/");
     } catch (err) {
-      setPassword("");
-      setError(err instanceof ApiError ? err.message : "Could not reach the server. Try again.");
+      const apiErr = err instanceof ApiError ? err : null;
+      if (apiErr?.code === "TOTP_REQUIRED") {
+        setNeedsCode(true);
+      } else if (apiErr?.code === "BAD_CODE") {
+        setCode("");
+        setError(apiErr.message);
+      } else {
+        restart();
+        setError(apiErr ? apiErr.message : "Could not reach the server. Try again.");
+      }
       setBusy(false);
     }
   };
@@ -45,28 +63,55 @@ export default function LoginForm() {
           </div>
         </div>
         <form onSubmit={submit} className="px-panel space-y-3 p-5" aria-label="Log in">
-          <label className="block">
-            <span className="px-label">Access password</span>
-            <input
-              className="px-input text-lg"
-              type="password"
-              name="password"
-              autoComplete="current-password"
-              autoFocus
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              aria-invalid={Boolean(error)}
-              aria-describedby={error ? "login-error" : undefined}
-            />
-          </label>
+          {needsCode ? (
+            <label className="block">
+              <span className="px-label">🔐 Authenticator code</span>
+              <input
+                className="px-input text-center font-mono text-2xl tracking-[0.3em]"
+                name="code"
+                inputMode="text"
+                autoComplete="one-time-code"
+                autoFocus
+                maxLength={11}
+                placeholder="123456"
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/[^0-9A-Za-z-]/g, ""))}
+                aria-invalid={Boolean(error)}
+                aria-describedby={error ? "login-error" : "code-help"}
+              />
+              <span id="code-help" className="mt-1 block text-xs text-cream-faint">
+                Open your authenticator app and type the 6-digit code for Four Wins. Lost your phone? Use a recovery code.
+              </span>
+            </label>
+          ) : (
+            <label className="block">
+              <span className="px-label">Access password</span>
+              <input
+                className="px-input text-lg"
+                type="password"
+                name="password"
+                autoComplete="current-password"
+                autoFocus
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                aria-invalid={Boolean(error)}
+                aria-describedby={error ? "login-error" : undefined}
+              />
+            </label>
+          )}
           {error && (
             <p id="login-error" role="alert" className="text-sm text-danger">
               {error}
             </p>
           )}
-          <button className="px-btn w-full text-lg" disabled={busy || !password}>
-            {busy ? "Opening the gates…" : "Enter the world ▸"}
+          <button className="px-btn w-full text-lg" disabled={busy || !password || (needsCode && !code.trim())}>
+            {busy ? "Opening the gates…" : needsCode ? "Verify ▸" : "Enter the world ▸"}
           </button>
+          {needsCode && (
+            <button type="button" className="px-ghost w-full text-xs" onClick={restart}>
+              ← Use a different password
+            </button>
+          )}
           <p className="text-center text-xs text-cream-faint">Private world. Attempts are rate-limited.</p>
         </form>
       </div>

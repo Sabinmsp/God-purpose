@@ -230,7 +230,7 @@ export interface GameState {
   unlocks: { key: string; unlockedAt: string }[];
   achievements: { key: string; earnedAt: string }[];
   welcome: WelcomeData | null;
-  security: { pinEnabled: boolean; weakPassword: boolean };
+  security: { pinEnabled: boolean; weakPassword: boolean; twoFactorEnabled: boolean; recoveryCodesLeft: number };
 }
 
 export interface PlayerSettings {

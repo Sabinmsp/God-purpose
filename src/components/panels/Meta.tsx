@@ -10,6 +10,7 @@ import { addDays, formatShortDate, startOfWeek } from "@/lib/shared/time";
 import { EQUIP_SLOTS, PHYSIQUE_NAMES, UNLOCKS, type EquipSlot } from "@/lib/shared/unlocks";
 import { Bar, Field, Portrait, Section, Sheet, Tabs, useBusy } from "../ui";
 import { GoalCard, GoalEditor } from "./common";
+import { TwoFactorSection } from "./TwoFactor";
 
 const SLOT_LABEL: Record<EquipSlot, string> = { outfit: "Outfit", hat: "Headwear", aura: "Aura", companion: "Companion" };
 
@@ -342,6 +343,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             {pin.pin ? "Set PIN" : s.security.pinEnabled ? "Remove PIN" : "Set PIN"}
           </button>
         </form>
+        <TwoFactorSection />
       </Section>
       <Section title="Your data">
         <p className="mb-2 text-sm text-cream-dim">Download a full JSON backup of your quests, XP, workouts, measurements, journal, money and goals.</p>

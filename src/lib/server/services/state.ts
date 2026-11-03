@@ -75,8 +75,9 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
         where player_id = ${ctx.playerId} and local_date = ${date} and source_type in ('quest', 'quest_undo')
         group by pillar
       `,
-      q<{ pin_hash: string | null; password_weak: boolean }[]>`
-        select pin_hash, password_weak from auth_credentials where player_id = ${ctx.playerId}
+      q<{ pin_hash: string | null; password_weak: boolean; totp_on: boolean; recovery_left: number }[]>`
+        select pin_hash, password_weak, totp_secret_enc is not null as totp_on, cardinality(recovery_hashes)::int as recovery_left
+        from auth_credentials where player_id = ${ctx.playerId}
       `,
       campaignDays(q, ctx.playerId, campaign, date),
       q<{ pillar: Pillar; n: number }[]>`
@@ -134,7 +135,12 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
     unlocks: unlockRows.map((r) => ({ key: r.key, unlockedAt: r.unlocked_at.toISOString() })),
     achievements: achievementRows.map((r) => ({ key: r.key, earnedAt: r.earned_at.toISOString() })),
     welcome: null,
-    security: { pinEnabled: Boolean(creds[0]?.pin_hash), weakPassword: Boolean(creds[0]?.password_weak) },
+    security: {
+      pinEnabled: Boolean(creds[0]?.pin_hash),
+      weakPassword: Boolean(creds[0]?.password_weak),
+      twoFactorEnabled: Boolean(creds[0]?.totp_on),
+      recoveryCodesLeft: creds[0]?.totp_on ? creds[0].recovery_left : 0,
+    },
   };
 
   if (opts.welcome) {

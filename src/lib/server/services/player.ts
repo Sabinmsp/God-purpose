@@ -64,7 +64,7 @@ export function equip(ctx: Ctx, slot: EquipSlot, key: string | null) {
   });
 }
 
-async function checkPassword(q: Q, playerId: string, password: string) {
+export async function checkPassword(q: Q, playerId: string, password: string) {
   const [cred] = await q<{ password_hash: string }[]>`select password_hash from auth_credentials where player_id = ${playerId}`;
   if (!cred || !(await verifySecret(password, cred.password_hash))) {
     throw new AppError(403, "Current password is incorrect", "BAD_PASSWORD");

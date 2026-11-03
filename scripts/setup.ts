@@ -2,6 +2,7 @@
  * One-time (and repeatable) setup:
  *   npm run setup            → migrate, create the player if needed, set the access password
  *   npm run setup -- --pin   → also set a 4–8 digit unlock PIN
+ *   npm run setup -- --reset-2fa → also turn off two-factor login (lost phone)
  *
  * The password is read from a hidden prompt (or FW_PASSWORD / FW_PIN for
  * non-interactive use) and only its scrypt hash is stored in the database.
@@ -103,6 +104,14 @@ async function main() {
       const pin = await readSecret("FW_PIN", "Unlock PIN (4–8 digits)", (v) => (/^\d{4,8}$/.test(v) ? null : "Use 4 to 8 digits."));
       await sql`update auth_credentials set pin_hash = ${await hashSecret(pin)} where player_id = ${player.id}`;
       console.log("  ✓ unlock PIN set");
+    }
+    if (process.argv.includes("--reset-2fa")) {
+      await sql`
+        update auth_credentials set totp_secret_enc = null, totp_pending_enc = null, totp_enabled_at = null,
+          totp_last_step = null, recovery_hashes = '{}'
+        where player_id = ${player.id}
+      `;
+      console.log("  ✓ two-factor login turned off (set it up again in Settings)");
     }
     console.log("\nDone. Start the game with `npm run dev`.\n");
   } finally {

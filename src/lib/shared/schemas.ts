@@ -10,7 +10,11 @@ const text = (max: number) => z.string().trim().max(max);
 /** Money arrives as integer cents; the client never sends balances. */
 const cents = z.number().int().positive().max(100_000_000_00);
 
-export const loginSchema = z.object({ password: z.string().min(1).max(256) });
+export const loginSchema = z.object({
+  password: z.string().min(1).max(256),
+  /** Authenticator code (6 digits) or a recovery code, once the password is accepted. */
+  code: z.string().trim().min(1).max(20).optional(),
+});
 export const pinSchema = z.object({ pin: z.string().regex(/^\d{4,8}$/) });
 
 export const questActionSchema = z.object({ dailyQuestId: id });
@@ -166,6 +170,12 @@ export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1).max(256),
   newPassword: z.string().min(4).max(256),
 });
+
+const secondFactorCode = z.string().trim().min(6).max(20);
+
+export const twoFactorStartSchema = z.object({ currentPassword: z.string().min(1).max(256) });
+export const twoFactorConfirmSchema = z.object({ code: z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code") });
+export const twoFactorGuardedSchema = z.object({ currentPassword: z.string().min(1).max(256), code: secondFactorCode });
 
 export const setPinSchema = z.object({
   currentPassword: z.string().min(1).max(256),
