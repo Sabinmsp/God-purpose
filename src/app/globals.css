@@ -366,3 +366,20 @@ button.hotbar-slot:hover {
 .reduced-motion .loc-dot {
   animation: none;
 }
+
+/* Today view: soft cards on a faint aurora, a calmer register than the pixel panels.
+   Layered so Tailwind utilities (border colours, padding) can still override them. */
+@layer components {
+.today-bg {
+  background:
+    radial-gradient(90% 40% at 50% -5%, rgb(143 124 240 / 0.14), transparent 70%),
+    radial-gradient(60% 30% at 100% 30%, rgb(95 196 164 / 0.06), transparent 70%),
+    var(--navy-950);
+}
+.card {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.035), rgb(255 255 255 / 0.01)), var(--navy-900);
+  border: 1px solid rgb(255 255 255 / 0.07);
+  border-radius: 1.25rem;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 10px 30px -12px rgb(0 0 0 / 0.6);
+}
+}

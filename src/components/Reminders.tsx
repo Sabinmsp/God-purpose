@@ -97,7 +97,7 @@ export function ReminderCard({ floating = false }: { floating?: boolean }) {
   if (floating && status !== "ready") return null;
   const later = (
     <button
-      className="px-btn secondary"
+      className={status === "ready" ? "px-btn secondary" : "shrink-0 rounded-full px-2.5 py-1 text-xs text-cream-faint transition-colors hover:bg-white/5 hover:text-cream"}
       onClick={() => {
         try {
           localStorage.setItem(SNOOZE_KEY, String(Date.now()));
@@ -112,13 +112,13 @@ export function ReminderCard({ floating = false }: { floating?: boolean }) {
   );
   return (
     <section
-      className={`rounded-2xl border border-gold/40 bg-navy-900 p-5 ${
+      className={`${status === "ready" ? "border-gold/40 p-5" : "px-4 py-3"} card ${
         floating ? "fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-30 mx-auto max-w-md shadow-2xl md:bottom-auto md:top-28" : ""
       }`}
       data-testid="reminder-card"
       aria-labelledby="reminder-card-title"
     >
-      <h2 id="reminder-card-title" className="font-semibold">
+      <h2 id="reminder-card-title" className={status === "ready" ? "font-semibold" : "text-sm font-semibold text-cream-dim"}>
         🔔 Let Four Wins come to you
       </h2>
       {status === "ready" ? (
@@ -135,10 +135,10 @@ export function ReminderCard({ floating = false }: { floating?: boolean }) {
           </div>
         </>
       ) : (
-        <>
-          <p className="mt-1 text-sm text-cream-dim">{status === "blocked" ? BLOCKED_HELP : INSTALL_HELP}</p>
-          <div className="mt-3 flex justify-end">{later}</div>
-        </>
+        <div className="mt-1 flex items-start gap-2">
+          <p className="flex-1 text-xs leading-relaxed text-cream-faint">{status === "blocked" ? BLOCKED_HELP : INSTALL_HELP}</p>
+          {later}
+        </div>
       )}
     </section>
   );
