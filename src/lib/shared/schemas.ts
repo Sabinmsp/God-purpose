@@ -159,6 +159,21 @@ export const settingsSchema = z.object({
   characterArt: z.enum(["pixellab", "classic"]).optional(),
   aiMemory: z.boolean().optional(),
   locationAwareness: z.boolean().optional(),
+  reminders: z.enum(["off", "gentle", "standard"]).optional(),
+});
+
+/** A browser PushSubscription, as produced by `subscription.toJSON()`. */
+export const pushSubscribeSchema = z.object({
+  endpoint: z.url({ protocol: /^https$/ }).max(1000),
+  keys: z.object({
+    p256dh: z.string().regex(/^[A-Za-z0-9_-]{80,100}$/),
+    auth: z.string().regex(/^[A-Za-z0-9_-]{16,40}$/),
+  }),
+});
+export const pushUnsubscribeSchema = z.object({ endpoint: z.string().max(1000) });
+export const pushActSchema = z.object({
+  token: z.string().min(40).max(200),
+  action: z.enum(["complete", "undo"]),
 });
 
 export const equipSchema = z.object({

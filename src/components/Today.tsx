@@ -10,6 +10,7 @@ import type { DailyQuest } from "@/lib/shared/types";
 import { AiPanel } from "./panels/Ai";
 import { WellbeingCard } from "./panels/Wellbeing";
 import { AUTO_HINT, QuestRow } from "./quests";
+import { ReminderCard } from "./Reminders";
 import { Bar, useBusy } from "./ui";
 
 type Tab = "today" | "progress";
@@ -85,6 +86,7 @@ function TodayScreen() {
   return (
     <div className="space-y-6">
       <Header />
+      <ReminderCard />
       <section className="flex flex-col items-center pt-2" aria-label="Today's wins">
         <WinsRing won={won} />
       </section>

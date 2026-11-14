@@ -14,6 +14,8 @@ const listeners = new Set<() => void>();
 let current: View | null = null;
 
 function initial(): View {
+  // A tapped reminder (and the home-screen icon) always lands on the today view.
+  if (new URLSearchParams(window.location.search).get("view") === "today") return "today";
   try {
     const saved = localStorage.getItem(KEY);
     if (saved === "today" || saved === "world") return saved;

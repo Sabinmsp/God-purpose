@@ -49,6 +49,33 @@ test("protected APIs refuse requests without a session or from another origin", 
   expect(html).not.toMatch(/scrypt\$|correct horse/);
 });
 
+test("reminders: the worker and scheduler are reachable without a session, and notification buttons need a signed token", async ({ request, baseURL }) => {
+  // A phone must be able to update its service worker after the login has expired.
+  const sw = await request.get("/sw.js", { maxRedirects: 0 });
+  expect(sw.status()).toBe(200);
+  expect(sw.headers()["content-type"]).toContain("javascript");
+  expect(sw.headers()["cache-control"]).toContain("no-store");
+  expect(await sw.text()).toContain("notificationclick");
+
+  const manifest = await request.get("/manifest.webmanifest", { maxRedirects: 0 });
+  expect(manifest.status()).toBe(200);
+  expect((await manifest.json()).start_url).toBe("/?view=today");
+  for (const icon of ["/icon-192.png", "/icon-512.png", "/icon-maskable-512.png", "/badge-96.png"]) {
+    expect((await request.get(icon, { maxRedirects: 0 })).status(), icon).toBe(200);
+  }
+
+  // The scheduler answers with counts only; nobody has reminders on, so nothing is sent.
+  const cron = await request.get("/api/cron/nudge/morning");
+  expect(cron.status()).toBe(200);
+  expect(await cron.json()).toMatchObject({ ok: true, players: 0, sent: 0, delivered: 0 });
+  expect((await request.get("/api/cron/nudge/anything-else")).status()).toBe(404);
+
+  const forged = { token: "00000000-0000-4000-8000-000000000000.1900000000.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", action: "complete" };
+  expect((await request.post("/api/push/act", { data: forged, headers: { origin: baseURL! } })).status()).toBe(403);
+  expect((await request.post("/api/push/act", { data: forged })).status()).toBe(403);
+  expect((await request.post("/api/push/subscribe", { data: {}, headers: { origin: baseURL! } })).status()).toBe(401);
+});
+
 test("first visit: welcome screen, real progress, and persistence", async ({ page, baseURL }) => {
   await page.goto("/login");
   await page.getByLabel("Access password").fill(E2E_PASSWORD);

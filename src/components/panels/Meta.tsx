@@ -10,6 +10,7 @@ import { addDays, formatShortDate, startOfWeek } from "@/lib/shared/time";
 import { EQUIP_SLOTS, PHYSIQUE_NAMES, UNLOCKS, type EquipSlot } from "@/lib/shared/unlocks";
 import { Bar, Field, Portrait, Section, Sheet, Tabs, useBusy } from "../ui";
 import { GoalCard, GoalEditor } from "./common";
+import { RemindersSection } from "../Reminders";
 import { TwoFactorSection } from "./TwoFactor";
 
 const SLOT_LABEL: Record<EquipSlot, string> = { outfit: "Outfit", hat: "Headwear", aura: "Aura", companion: "Companion" };
@@ -260,6 +261,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             Save
           </button>
         </form>
+      </Section>
+      <Section title="Reminders">
+        <RemindersSection />
       </Section>
       <Section title="Game">
         <div className="space-y-2">

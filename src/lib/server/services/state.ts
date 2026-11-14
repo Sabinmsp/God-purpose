@@ -7,6 +7,7 @@ import { APP_TIMEZONE, addDays, daysBetween, localClock, startOfMonth } from "@/
 import type { DayProgress, GameState, ProgressSnapshot, WelcomeData } from "@/lib/shared/types";
 import { sanitizeEquipped, unlockedKeys } from "@/lib/shared/unlocks";
 import type { Q } from "../db";
+import { vapidKeys } from "../push/vapid";
 import { bodySummary } from "./body";
 import { listGoals } from "./goals";
 import { journalForDay } from "./journal";
@@ -55,7 +56,7 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
   await ensureBoard(q, ctx.playerId, date);
   const campaign = await getCampaign(q, ctx.playerId);
 
-  const [player, xp, quests, library, savings, finance, body, goals, journal, week, days, unlockRows, achievementRows, xpTodayRows, creds, cDays, doneRows, wellbeing] =
+  const [player, xp, quests, library, savings, finance, body, goals, journal, week, days, unlockRows, achievementRows, xpTodayRows, creds, cDays, doneRows, wellbeing, devices] =
     await Promise.all([
       getPlayer(q, ctx.playerId),
       pillarXp(q, ctx.playerId),
@@ -84,6 +85,7 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
         select pillar, count(*)::int as n from daily_quests where player_id = ${ctx.playerId} and status = 'done' group by pillar
       `,
       wellbeingSummary(q, ctx.playerId, date),
+      q<{ n: number }[]>`select count(*)::int as n from push_subscriptions where player_id = ${ctx.playerId}`.then((r) => r[0].n),
     ]);
 
   const levels = levelsOf(xp);
@@ -106,6 +108,7 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
       pillars: Object.fromEntries(PILLARS.map((p) => [p, levelProgress(xp[p])])) as GameState["stats"]["pillars"],
       overall: overallProgress(xp),
       streak: streaks.all,
+      lastWinDate: days.rows.reduce<string | null>((max, r) => (max === null || r.local_date > max ? r.local_date : max), null),
       pillarStreaks: streaks.perPillar,
       missionsDone: Object.fromEntries(PILLARS.map((p) => [p, doneRows.find((r) => r.pillar === p)?.n ?? 0])) as Record<Pillar, number>,
     },
@@ -135,6 +138,7 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
     unlocks: unlockRows.map((r) => ({ key: r.key, unlockedAt: r.unlocked_at.toISOString() })),
     achievements: achievementRows.map((r) => ({ key: r.key, earnedAt: r.earned_at.toISOString() })),
     welcome: null,
+    reminders: { publicKey: vapidKeys().publicKey, devices },
     security: {
       pinEnabled: Boolean(creds[0]?.pin_hash),
       weakPassword: Boolean(creds[0]?.password_weak),

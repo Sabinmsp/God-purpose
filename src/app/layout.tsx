@@ -9,6 +9,8 @@ export const metadata: Metadata = {
   title: "Four Wins: The Life RPG",
   description: "Level up in real life.",
   robots: { index: false, follow: false },
+  icons: { icon: [{ url: "/favicon.ico" }, { url: "/icon-192.png", sizes: "192x192", type: "image/png" }], apple: "/icon-192.png" },
+  appleWebApp: { capable: true, title: "Four Wins", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {

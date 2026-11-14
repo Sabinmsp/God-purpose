@@ -19,6 +19,7 @@ import { QuestBoardPanel } from "./panels/QuestBoard";
 import { StrengthPanel } from "./panels/Strength";
 import { WealthPanel } from "./panels/Wealth";
 import { Hotbar, Hud } from "./Hud";
+import { ReminderCard } from "./Reminders";
 import { TodayApp } from "./Today";
 import { QuestRow } from "./quests";
 import { WellbeingCard } from "./panels/Wellbeing";
@@ -59,6 +60,7 @@ function Shell() {
               <FocusPrompt />
               <TouchControls />
               <AiHost />
+              <ReminderCard floating />
             </>
           )}
           {(loading || !state || !view) && !locked && <Loading />}

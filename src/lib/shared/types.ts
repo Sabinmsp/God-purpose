@@ -1,3 +1,4 @@
+import type { ReminderLevel } from "./nudge";
 import type { CampaignDay, CampaignInfo, CampaignProgress } from "./campaign";
 import type { Pillar } from "./pillars";
 import type { LevelProgress } from "./progression";
@@ -194,6 +195,8 @@ export interface GameState {
     pillars: Record<Pillar, LevelProgress>;
     overall: LevelProgress & { totalXp: number };
     streak: { current: number; best: number; activeToday: boolean };
+    /** Most recent Darwin day with a completed quest; null before the first win. */
+    lastWinDate: string | null;
     pillarStreaks: Record<Pillar, number>;
     /** All-time completed missions per pillar (the INT/STR/WIS/WEA attributes). */
     missionsDone: Record<Pillar, number>;
@@ -230,6 +233,8 @@ export interface GameState {
   unlocks: { key: string; unlockedAt: string }[];
   achievements: { key: string; earnedAt: string }[];
   welcome: WelcomeData | null;
+  /** Push reminders: the server's public key and how many devices have them on. */
+  reminders: { publicKey: string; devices: number };
   security: { pinEnabled: boolean; weakPassword: boolean; twoFactorEnabled: boolean; recoveryCodesLeft: number };
 }
 
@@ -244,6 +249,8 @@ export interface PlayerSettings {
   aiMemory: boolean;
   /** Show the optional "check my location" tools. Coordinates are never stored. */
   locationAwareness: boolean;
+  /** How often the game nudges you on devices with reminders on. */
+  reminders: ReminderLevel;
 }
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
@@ -254,6 +261,7 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   characterArt: "pixellab",
   aiMemory: true,
   locationAwareness: false,
+  reminders: "standard",
 };
 
 export type GameEvent =
