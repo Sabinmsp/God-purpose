@@ -274,7 +274,8 @@ function ChatTab({
         <div className="px-card p-4" data-testid="ai-not-configured">
           <p className="font-pixel mb-1 text-gold">💤 Chat is sleeping</p>
           <p className="text-sm text-cream-dim">
-            The AI companion needs an AI key on the server before it can chat. Add <code className="text-cream">ANTHROPIC_API_KEY</code> to the server environment (for local
+            The AI companion needs an AI key on the server before it can chat. For a free open-source model, set <code className="text-cream">AI_PROVIDER=groq</code> and{" "}
+            <code className="text-cream">AI_API_KEY</code>; for Claude, set <code className="text-cream">ANTHROPIC_API_KEY</code>. Add them to the server environment (for local
             development, in <code className="text-cream">.env.local</code>) and restart the game. Keys stay on the server and are never sent to your browser.
           </p>
           <p className="mt-2 text-sm text-cream-dim">Until then, The Guide in the plaza can still answer questions from your records.</p>
