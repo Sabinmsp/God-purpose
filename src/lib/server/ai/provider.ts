@@ -2,6 +2,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { aiReplySchema, type AiReply } from "@/lib/shared/ai";
+import { compatibleProviderFromEnv } from "./openai-compatible";
 
 export interface AiTurn {
   role: "user" | "assistant";
@@ -105,15 +106,17 @@ export function setAiProvider(provider: AiProvider | null | undefined) {
 /**
  * The configured provider, or null when no credentials are set. Everything is
  * read from server-only environment variables:
- *   AI_PROVIDER        anthropic (default)
+ *   AI_PROVIDER        anthropic (default) | groq | openrouter | ollama | openai-compatible
  *   ANTHROPIC_API_KEY  required for anthropic
- *   AI_MODEL           default claude-opus-5-5
- *   AI_EFFORT          low | medium (default) | high | xhigh | max
+ *   AI_MODEL           default claude-opus-5-5 (anthropic); see openai-compatible.ts for the others
+ *   AI_EFFORT          low | medium (default) | high | xhigh | max (anthropic only)
+ *   AI_API_KEY         key for groq / openrouter / openai-compatible
+ *   AI_BASE_URL        endpoint for openai-compatible, or to override a preset
  */
 export function getAiProvider(): AiProvider | null {
   if (override !== undefined) return override;
-  const provider = (process.env.AI_PROVIDER ?? "anthropic").toLowerCase();
-  if (provider !== "anthropic") return null;
+  const provider = configuredProviderName();
+  if (provider !== "anthropic") return compatibleProviderFromEnv(provider);
   if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) return null;
   const effortEnv = (process.env.AI_EFFORT ?? "medium") as Effort;
   const effort = EFFORTS.includes(effortEnv) ? effortEnv : "medium";
