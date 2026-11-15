@@ -247,6 +247,8 @@ export interface PlayerSettings {
   characterArt: "pixellab" | "classic";
   /** Let the AI companion read the memories the player saved or approved. */
   aiMemory: boolean;
+  /** How the player wants the AI coach to act (tone, strictness, focus). Empty means the default coach. */
+  aiInstructions: string;
   /** Show the optional "check my location" tools. Coordinates are never stored. */
   locationAwareness: boolean;
   /** How often the game nudges you on devices with reminders on. */
@@ -260,6 +262,7 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   textScale: 1,
   characterArt: "pixellab",
   aiMemory: true,
+  aiInstructions: "",
   locationAwareness: false,
   reminders: "standard",
 };

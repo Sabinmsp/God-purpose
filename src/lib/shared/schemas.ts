@@ -1,3 +1,4 @@
+import { AI_LIMITS } from "./ai";
 import { z } from "zod";
 import { PILLARS } from "./pillars";
 import { ALLOWED_QUEST_XP } from "./progression";
@@ -158,6 +159,7 @@ export const settingsSchema = z.object({
   textScale: z.number().min(0.85).max(1.4).optional(),
   characterArt: z.enum(["pixellab", "classic"]).optional(),
   aiMemory: z.boolean().optional(),
+  aiInstructions: z.string().trim().max(AI_LIMITS.coachChars).optional(),
   locationAwareness: z.boolean().optional(),
   reminders: z.enum(["off", "gentle", "standard"]).optional(),
 });

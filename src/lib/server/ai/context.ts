@@ -94,6 +94,9 @@ export function buildAiContext(
     }
   }
 
+  const coach = s.player.settings.aiInstructions?.trim();
+  lines.push("", coach ? `How the player wants you to coach them (they wrote this in the Coach tab):\n"""\n${coach}\n"""` : "How the player wants you to coach them: not set, use your default style.");
+
   lines.push("");
   if (opts.memories === null) {
     lines.push("Memory: OFF — the player turned memory off. Do not propose memories.");

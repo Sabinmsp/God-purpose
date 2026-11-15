@@ -7,6 +7,7 @@ import { aiBot } from "@/game/art/companion";
 import { play } from "@/game/audio";
 import {
   AI_LIMITS,
+  COACH_PRESETS,
   MEMORY_CATEGORIES,
   MEMORY_LABELS,
   SUGGESTED_QUESTIONS,
@@ -496,6 +497,72 @@ function MemoryTab({ memories, setMemories }: { memories: AiMemoryView[]; setMem
   );
 }
 
+/** The player's own instructions for how the AI should act. Stored with their settings. */
+function CoachTab() {
+  const s = useGameState();
+  const { act } = useGame();
+  const { busy, run } = useBusy();
+  const saved = s.player.settings.aiInstructions ?? "";
+  const [text, setText] = useState(saved);
+  const changed = text.trim() !== saved.trim();
+  const save = (value: string) => run(() => act("/api/player/settings", { aiInstructions: value.trim() }, "PATCH"));
+  return (
+    <>
+      <Section title="How should your coach act?">
+        <p className="mb-2 text-sm text-cream-dim">
+          Write it in your own words: how strict, how long the answers are, what to focus on, what to ask you about. Four Wins AI follows this on every message.
+        </p>
+        <label className="sr-only" htmlFor="coach-instructions">
+          Coaching instructions
+        </label>
+        <textarea
+          id="coach-instructions"
+          className="px-input min-h-40 resize-y text-sm leading-relaxed"
+          value={text}
+          maxLength={AI_LIMITS.coachChars}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="e.g. Be strict with me. Use my records as proof. Keep answers short. My priority is getting a job, so ask me every day how many applications I sent."
+          data-testid="coach-instructions"
+        />
+        <div className="mt-1 flex items-center justify-between text-xs text-cream-faint">
+          <span>{saved ? (changed ? "Unsaved changes" : "Saved ✓") : "Not set: using the default coach"}</span>
+          <span>
+            {text.length}/{AI_LIMITS.coachChars}
+          </span>
+        </div>
+        <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+          <button className="px-btn" disabled={busy || !changed} onClick={() => void save(text)}>
+            Save
+          </button>
+          <button
+            className="px-btn secondary"
+            disabled={busy || (!saved && !text)}
+            onClick={() => {
+              setText("");
+              void save("");
+            }}
+          >
+            Reset
+          </button>
+        </div>
+      </Section>
+      <Section title="Start from a style">
+        <div className="grid grid-cols-2 gap-2">
+          {COACH_PRESETS.map((p) => (
+            <button key={p.label} className="px-btn secondary small !justify-start" onClick={() => setText(p.text)} title={p.text}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-cream-faint">Tapping a style fills the box. Edit it if you like, then press Save.</p>
+      </Section>
+      <p className="text-xs text-cream-faint">
+        The coach still only uses your real records, never invents progress, and only suggests missions for you to approve, whatever you write here.
+      </p>
+    </>
+  );
+}
+
 function LocationTab() {
   const s = useGameState();
   const { act } = useGame();
@@ -584,7 +651,7 @@ function LocationTab() {
 
 export function AiPanel({ onClose }: { onClose: () => void }) {
   const { applyResult, toast } = useGame();
-  const [tab, setTab] = useState<"chat" | "memory" | "location">("chat");
+  const [tab, setTab] = useState<"chat" | "coach" | "memory" | "location">("chat");
   const [status, setStatus] = useState<AiStatus | null>(null);
   const [messages, setMessages] = useState<AiMessageView[]>([]);
   const [proposals, setProposals] = useState<AiProposalView[]>([]);
@@ -645,6 +712,7 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
       <Tabs
         tabs={[
           { id: "chat", label: "Chat" },
+          { id: "coach", label: "Coach" },
           { id: "memory", label: `Memory (${memories.length})` },
           { id: "location", label: "Location" },
         ]}
@@ -664,6 +732,7 @@ export function AiPanel({ onClose }: { onClose: () => void }) {
           onClear={clear}
         />
       )}
+      {tab === "coach" && <CoachTab />}
       {tab === "memory" && <MemoryTab memories={memories} setMemories={setMemories} />}
       {tab === "location" && <LocationTab />}
     </Sheet>

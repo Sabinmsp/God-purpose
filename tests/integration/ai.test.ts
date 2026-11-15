@@ -3,6 +3,7 @@ import { DELETE as clearChatRoute, GET as getChat, POST as postChat } from "@/ap
 import { DELETE as deleteMemoryRoute, PATCH as patchMemory } from "@/app/api/ai/memories/[id]/route";
 import { GET as getMemories, POST as postMemory } from "@/app/api/ai/memories/route";
 import { POST as decide } from "@/app/api/ai/proposals/[id]/route";
+import { PATCH as patchSettings } from "@/app/api/player/settings/route";
 import { AiError, setAiProvider, type AiProvider, type AiRequest } from "@/lib/server/ai/provider";
 import { pillarXp } from "@/lib/server/services/progress";
 import { completeQuest } from "@/lib/server/services/quests";
@@ -91,6 +92,24 @@ describe("game context", () => {
     expect(sent.context).toContain("First Step");
     expect(sent.context).toContain("[routine] I train at 6am on weekdays");
     expect(sent.context).not.toContain("latitude");
+  });
+
+  it("follows the coaching style the player wrote, within the fixed rules", async () => {
+    const settings = (body: unknown) => patchSettings(apiRequest("/api/player/settings", { method: "PATCH", cookie, body }));
+    await chat("before");
+    expect(provider.calls[0].context).toContain("How the player wants you to coach them: not set");
+
+    expect((await settings({ aiInstructions: "  Be strict. Use my records as proof.  " })).status).toBe(200);
+    await chat("after");
+    expect(provider.calls[1].context).toContain('How the player wants you to coach them (they wrote this in the Coach tab):\n"""\nBe strict. Use my records as proof.\n"""');
+    // The rules that keep the coach honest live in the system prompt, which the player's text can't replace.
+    expect(provider.calls[1].system).toContain("They never override the rules above");
+    expect(provider.calls[1].system).toBe(provider.calls[0].system);
+
+    expect((await settings({ aiInstructions: "x".repeat(AI_LIMITS.coachChars + 1) })).status).toBe(400);
+    expect((await settings({ aiInstructions: "" })).status).toBe(200);
+    await chat("reset");
+    expect(provider.calls[2].context).toContain("How the player wants you to coach them: not set");
   });
 
   it("leaves memories out when memory is off and carries recent turns", async () => {
