@@ -76,8 +76,8 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
         where player_id = ${ctx.playerId} and local_date = ${date} and source_type in ('quest', 'quest_undo')
         group by pillar
       `,
-      q<{ pin_hash: string | null; password_weak: boolean; totp_on: boolean; recovery_left: number }[]>`
-        select pin_hash, password_weak, totp_secret_enc is not null as totp_on, cardinality(recovery_hashes)::int as recovery_left
+      q<{ username: string; pin_hash: string | null; password_weak: boolean; totp_on: boolean; recovery_left: number }[]>`
+        select username, pin_hash, password_weak, totp_secret_enc is not null as totp_on, cardinality(recovery_hashes)::int as recovery_left
         from auth_credentials where player_id = ${ctx.playerId}
       `,
       campaignDays(q, ctx.playerId, campaign, date),
@@ -140,6 +140,7 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
     welcome: null,
     reminders: { publicKey: vapidKeys().publicKey, devices },
     security: {
+      username: creds[0]?.username ?? "",
       pinEnabled: Boolean(creds[0]?.pin_hash),
       weakPassword: Boolean(creds[0]?.password_weak),
       twoFactorEnabled: Boolean(creds[0]?.totp_on),

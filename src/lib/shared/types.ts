@@ -235,7 +235,7 @@ export interface GameState {
   welcome: WelcomeData | null;
   /** Push reminders: the server's public key and how many devices have them on. */
   reminders: { publicKey: string; devices: number };
-  security: { pinEnabled: boolean; weakPassword: boolean; twoFactorEnabled: boolean; recoveryCodesLeft: number };
+  security: { username: string; pinEnabled: boolean; weakPassword: boolean; twoFactorEnabled: boolean; recoveryCodesLeft: number };
 }
 
 export interface PlayerSettings {

@@ -32,6 +32,8 @@ npm run setup                     # migrates, creates the player, asks for the a
 npm run dev                       # http://localhost:3000
 ```
 
+`npm run setup` creates the first player and prints their username, made from their name ("Sabin" logs in as `sabin`). Everyone else creates their own account from **New here? Create an account** on the login page.
+
 `npm run setup` stores only a scrypt hash of the password. It is never written to `.env`, Git, logs or the browser. Re-run it any time to change the password (other sessions are signed out). `npm run setup -- --pin` also sets a 4–8 digit unlock PIN.
 
 ## Scripts
@@ -79,7 +81,8 @@ tests/                 unit · integration (real DB) · e2e (Playwright)
 
 - Server-side password check (scrypt, constant-time compare); the raw password never reaches code, env vars, `NEXT_PUBLIC_*`, localStorage or Git.
 - Sessions: random 256-bit token, only its SHA-256 stored; `HttpOnly`, `SameSite=Strict`, `Secure` + `__Host-` prefix in production; 30-day absolute and 7-day idle expiry; logout revokes server-side.
-- Login rate limits stored in Postgres (hold across all serverless instances): 5 failures per IP per 15 min, 20 failures across all IPs per hour.
+- Accounts: each player signs in with their own username and password, and every record (quests, XP, money, journal, AI chat and memories) belongs to one player; the server only ever reads and writes the signed-in player's rows. New accounts start their own 75-day campaign on the day they join. Sign-ups are open by default; set `SIGNUPS=closed` to stop them or `SIGNUP_CODE` to require an invite code. Settings → **Delete my account** removes the player and everything they own after the password is typed again. There is no email, so a forgotten password is reset by the owner with `npm run setup -- --user <username>`.
+- Login rate limits stored in Postgres (hold across all serverless instances): 5 failures per IP per 15 min, 10 failures per account per hour (from anywhere), and a 300-per-hour ceiling across the whole server. Unknown usernames and wrong passwords get the same answer and take the same time. Sign-ups: 3 per IP per hour, 30 per hour in total.
 - Optional two-factor login (Settings → Security): scan a QR code with any authenticator app (TOTP, RFC 6238). With it on, the password alone never opens a session. Codes are checked on the server, each code works once (replays are refused), wrong codes are rate-limited like passwords, and turning it on signs out other devices. The secret is AES-256-GCM encrypted with a key derived from `AUTH_SECRET`. The 10 one-time recovery codes are stored only as SHA-256 hashes. Lost your phone and your recovery codes? Run `npm run setup -- --reset-2fa` against the database.
 - Optional PIN: with a PIN set, sessions idle for 12 h lock and require the PIN; 5 wrong PINs revoke the session.
 - Reminder buttons: a notification's Done/Undo buttons call `/api/push/act` with no session, because reminders must work after a login has expired. The authorisation is a signed token inside the (encrypted) push message: HMAC-SHA256 with a key derived from `AUTH_SECRET`, bound to one player and one of today's quests, valid 36 hours. It can complete or undo that single quest and nothing else. Subscription endpoints are accepted only for known push services, so the server cannot be pointed at arbitrary URLs.

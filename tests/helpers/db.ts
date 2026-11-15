@@ -9,6 +9,7 @@ import { seedPlayer } from "@/lib/server/services/seed";
 import { localDate } from "@/lib/shared/time";
 
 export const TEST_PASSWORD = "correct horse battery staple";
+export const TEST_USERNAME = "sabin";
 export const ORIGIN = "http://localhost:3000";
 
 let sql: Sql | undefined;
@@ -23,7 +24,7 @@ export async function resetDb(now = new Date()) {
   await runMigrations(sql, () => {});
   const [player] = await sql<{ id: string }[]>`insert into players (display_name) values ('Sabin') returning id`;
   await sql.begin((tx) => seedPlayer(tx, player.id, localDate(now)));
-  await sql`insert into auth_credentials (player_id, password_hash) values (${player.id}, ${await hashSecret(TEST_PASSWORD)})`;
+  await sql`insert into auth_credentials (player_id, username, password_hash) values (${player.id}, ${TEST_USERNAME}, ${await hashSecret(TEST_PASSWORD)})`;
   return { sql, playerId: player.id };
 }
 

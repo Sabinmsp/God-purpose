@@ -8,11 +8,20 @@ import { authSecret } from "../env";
  * instance. A short PIN-style password has only 10,000 combinations, so the
  * limits are deliberately strict:
  *  - per client IP: 5 failures per 15 minutes
- *  - across all clients: 20 failures per hour (stops distributed guessing)
+ *  - per account: 10 failures per hour, from anywhere (stops distributed guessing
+ *    of one person's password without locking everyone else out)
+ *  - across all clients: 300 failures per hour (a circuit breaker for floods)
  */
 export const LIMITS = {
   ip: { max: 5, windowMs: 15 * 60 * 1000 },
-  global: { max: 20, windowMs: 60 * 60 * 1000 },
+  account: { max: 10, windowMs: 60 * 60 * 1000 },
+  global: { max: 300, windowMs: 60 * 60 * 1000 },
+};
+
+/** New accounts: a few per client per hour, and a ceiling for the whole server. */
+export const SIGNUP_LIMITS = {
+  ip: { max: 3, windowMs: 60 * 60 * 1000 },
+  global: { max: 30, windowMs: 60 * 60 * 1000 },
 };
 
 export function clientIp(headers: Headers): string {
@@ -28,9 +37,14 @@ export function ipBucket(ip: string): string {
   return "ip:" + createHmac("sha256", authSecret()).update(ip).digest("hex").slice(0, 32);
 }
 
-export type AttemptKind = "password" | "pin" | "totp";
+/** Bucket for one username, keyed so the table never holds usernames in the clear. */
+export function accountBucket(username: string): string {
+  return "acct:" + createHmac("sha256", authSecret()).update(username).digest("hex").slice(0, 32);
+}
 
-export type LimitCheck = { allowed: true } | { allowed: false; retryAfterSec: number; scope: "ip" | "global" };
+export type AttemptKind = "password" | "pin" | "totp" | "signup";
+
+export type LimitCheck = { allowed: true } | { allowed: false; retryAfterSec: number; scope: "ip" | "account" | "global" };
 
 async function failuresSince(sql: Q, bucket: string, kind: string, since: Date) {
   const [row] = await sql<{ n: number; oldest: Date | null }[]>`
@@ -41,9 +55,10 @@ async function failuresSince(sql: Q, bucket: string, kind: string, since: Date) 
   return row;
 }
 
-export async function checkLoginLimit(sql: Q, bucket: string, kind: AttemptKind, now = new Date()): Promise<LimitCheck> {
+export async function checkLoginLimit(sql: Q, bucket: string, kind: AttemptKind, now = new Date(), account?: string): Promise<LimitCheck> {
   const checks = [
     { scope: "ip" as const, bucket, ...LIMITS.ip },
+    ...(account ? [{ scope: "account" as const, bucket: account, ...LIMITS.account }] : []),
     { scope: "global" as const, bucket: "global", ...LIMITS.global },
   ];
   for (const c of checks) {
@@ -57,17 +72,45 @@ export async function checkLoginLimit(sql: Q, bucket: string, kind: AttemptKind,
   return { allowed: true };
 }
 
-export async function recordLoginAttempt(sql: Q, bucket: string, kind: AttemptKind, success: boolean, now = new Date()) {
+export async function recordLoginAttempt(sql: Q, bucket: string, kind: AttemptKind, success: boolean, now = new Date(), account?: string) {
   await sql`
     insert into login_attempts (bucket, kind, success, created_at)
     values (${bucket}, ${kind}, ${success}, ${now})
   `;
   if (!success) {
-    await sql`
-      insert into login_attempts (bucket, kind, success, created_at)
-      values ('global', ${kind}, false, ${now})
-    `;
+    for (const extra of [account, "global"]) {
+      if (!extra) continue;
+      await sql`
+        insert into login_attempts (bucket, kind, success, created_at)
+        values (${extra}, ${kind}, false, ${now})
+      `;
+    }
   }
   // Keep the table small.
   await sql`delete from login_attempts where created_at < ${new Date(now.getTime() - 7 * 86_400_000)}`;
+}
+
+/** Sign-ups count every attempt that created an account, not only failures. */
+export async function checkSignupLimit(sql: Q, bucket: string, now = new Date()): Promise<LimitCheck> {
+  for (const c of [
+    { scope: "ip" as const, bucket, ...SIGNUP_LIMITS.ip },
+    { scope: "global" as const, bucket: "global", ...SIGNUP_LIMITS.global },
+  ]) {
+    const since = new Date(now.getTime() - c.windowMs);
+    const [row] = await sql<{ n: number; oldest: Date | null }[]>`
+      select count(*)::int as n, min(created_at) as oldest from login_attempts
+      where bucket = ${c.bucket} and kind = 'signup' and success = true and created_at > ${since}
+    `;
+    if (row.n >= c.max && row.oldest) {
+      return { allowed: false, retryAfterSec: Math.max(1, Math.ceil((row.oldest.getTime() + c.windowMs - now.getTime()) / 1000)), scope: c.scope };
+    }
+  }
+  return { allowed: true };
+}
+
+export async function recordSignup(sql: Q, bucket: string, now = new Date()) {
+  await sql`
+    insert into login_attempts (bucket, kind, success, created_at)
+    values (${bucket}, 'signup', true, ${now}), ('global', 'signup', true, ${now})
+  `;
 }
