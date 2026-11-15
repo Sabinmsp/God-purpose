@@ -4,7 +4,7 @@ import type { AiMemoryView } from "@/lib/shared/ai";
 import { EVOLUTION, STAGE_NAMES, isFourWinsDay } from "@/lib/shared/campaign";
 import { formatAud } from "@/lib/shared/money";
 import { PILLARS, PILLAR_META } from "@/lib/shared/pillars";
-import { formatLongDate } from "@/lib/shared/time";
+import { addDays, daysBetween, formatLongDate, formatShortDate } from "@/lib/shared/time";
 import type { GameState } from "@/lib/shared/types";
 import { WELLBEING_FIELDS, WELLBEING_META, formatWellbeing } from "@/lib/shared/wellbeing";
 
@@ -14,7 +14,12 @@ import { WELLBEING_FIELDS, WELLBEING_META, formatWellbeing } from "@/lib/shared/
  */
 export function buildAiContext(
   s: GameState,
-  opts: { memories: AiMemoryView[] | null; location?: { lat: number; lon: number } | null },
+  opts: {
+    memories: AiMemoryView[] | null;
+    location?: { lat: number; lon: number } | null;
+    /** Full rest days in the record window; without it only the days already in the state are known. */
+    restDates?: string[];
+  },
 ): string {
   const lines: string[] = [];
   const c = s.campaign;
@@ -29,6 +34,8 @@ export function buildAiContext(
   lines.push(
     `Four Wins days so far: ${c.progress.fourWinsDays}${yesterday ? ` · yesterday: ${isFourWinsDay(yesterday) ? "Four Wins" : `${yesterday.pillars.length}/4 pillars won`}` : ""}`,
   );
+
+  lines.push(...recordLines(s, opts.restDates));
 
   lines.push("", "Today's missions:");
   for (const p of PILLARS) {
@@ -102,4 +109,57 @@ export function buildAiContext(
   }
 
   return `<game_data>\n${lines.join("\n")}\n</game_data>`;
+}
+
+export const RECORD_DAYS = 14;
+
+/**
+ * The day-by-day evidence for "why am I not progressing": what was actually
+ * logged on each recent day. A day with no completed mission is reported as
+ * exactly that, never filled in.
+ */
+function recordLines(s: GameState, restDates: string[] = []): string[] {
+  const c = s.campaign;
+  const today = s.now.date;
+  const from = [addDays(today, -(RECORD_DAYS - 1)), c.startDate].sort().at(-1)!;
+  if (from > today) return [];
+  const won = new Map(c.days.map((d) => [d.date, d]));
+  const rest = new Set([...restDates, ...[...s.week, ...s.calendar.days].filter((d) => d.rest).map((d) => d.date)]);
+  const span = daysBetween(from, today) + 1;
+  const lines = ["", `Daily record, last ${span} day${span === 1 ? "" : "s"} (a mission only counts once it is marked done or logged):`];
+  const perPillar = Object.fromEntries(PILLARS.map((p) => [p, 0])) as Record<(typeof PILLARS)[number], number>;
+  let empty = 0;
+  let fourWins = 0;
+  for (let i = 0; i < span; i++) {
+    const date = addDays(from, i);
+    const d = won.get(date);
+    const pillars = PILLARS.filter((p) => d?.pillars.includes(p));
+    for (const p of pillars) perPillar[p]++;
+    if (pillars.length === 4) fourWins++;
+    // Today is still in progress, so an empty today is not counted as a missed day.
+    const missed = !pillars.length && !rest.has(date) && date !== today;
+    if (missed) empty++;
+    const what = pillars.length
+      ? `${pillars.length}/4 pillars won (${pillars.map((p) => PILLAR_META[p].name).join(", ")}), ${d!.quests} mission${d!.quests === 1 ? "" : "s"}, ${d!.xp} XP`
+      : rest.has(date)
+        ? "rest day, nothing logged"
+        : date === today
+          ? "nothing logged yet (day in progress)"
+          : "nothing logged";
+    lines.push(`- ${formatShortDate(date)}${date === today ? " (today)" : ""}: ${what}`);
+  }
+  lines.push(
+    `Summary of those ${span} days: ${empty} with nothing logged, ${fourWins} Four Wins day${fourWins === 1 ? "" : "s"}; days won per pillar: ${PILLARS.map((p) => `${PILLAR_META[p].name} ${perPillar[p]}`).join(", ")}.`,
+  );
+  const last = s.stats.lastWinDate;
+  lines.push(last ? `Last completed mission: ${formatShortDate(last)} (${daysBetween(last, today)} day${daysBetween(last, today) === 1 ? "" : "s"} ago).` : "No mission has ever been completed.");
+  // Check-ins are loaded for the last seven days only, so that is all this reports.
+  const week = addDays(today, -6);
+  const checkins = s.wellbeing.recent.filter((w) => w.date >= week).sort((a, b) => a.date.localeCompare(b.date));
+  lines.push(`Wellbeing check-ins, last 7 days (self-reported): ${checkins.length} of 7 logged.`);
+  for (const w of checkins) {
+    const parts = WELLBEING_FIELDS.filter((f) => w[f] != null).map((f) => `${WELLBEING_META[f].label.toLowerCase()} ${formatWellbeing(f, w[f])}`);
+    if (parts.length) lines.push(`- ${formatShortDate(w.date)}: ${parts.join(", ")}`);
+  }
+  return lines;
 }

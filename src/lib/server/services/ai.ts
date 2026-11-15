@@ -12,7 +12,8 @@ import {
 } from "@/lib/shared/ai";
 import { ALLOWED_QUEST_XP } from "@/lib/shared/progression";
 import type { GameEvent } from "@/lib/shared/types";
-import { buildAiContext } from "../ai/context";
+import { addDays } from "@/lib/shared/time";
+import { RECORD_DAYS, buildAiContext } from "../ai/context";
 import { SYSTEM_PROMPT } from "../ai/prompt";
 import { AiError, configuredProviderName, getAiProvider, type AiTurn } from "../ai/provider";
 import type { Q } from "../db";
@@ -129,6 +130,12 @@ export async function sendChat(ctx: Ctx, input: { message: string; location?: { 
   const state = await buildState(ctx);
   const memoryEnabled = state.player.settings.aiMemory;
   const memories = memoryEnabled ? await listMemories(ctx.sql, ctx.playerId) : null;
+  const restDates = (
+    await ctx.sql<{ local_date: string }[]>`
+      select distinct local_date from rest_days
+      where player_id = ${ctx.playerId} and scope = 'all' and local_date between ${addDays(state.now.date, -(RECORD_DAYS - 1))} and ${state.now.date}
+    `
+  ).map((r) => r.local_date);
   const recent = await listMessages(ctx.sql, ctx.playerId, AI_LIMITS.historyTurns);
   const firstUser = recent.findIndex((m) => m.role === "user");
   const history: AiTurn[] = (firstUser >= 0 ? recent.slice(firstUser) : []).map((m) => ({ role: m.role, content: m.content }));
@@ -140,7 +147,7 @@ export async function sendChat(ctx: Ctx, input: { message: string; location?: { 
     reply = await provider.reply({
       system: SYSTEM_PROMPT,
       history,
-      context: buildAiContext(state, { memories, location }),
+      context: buildAiContext(state, { memories, location, restDates }),
       message: input.message,
     });
   } catch (err) {

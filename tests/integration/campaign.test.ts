@@ -1,3 +1,4 @@
+import { buildAiContext } from "@/lib/server/ai/context";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { GET as dayRoute } from "@/app/api/campaign/day/route";
 import { dayDetail } from "@/lib/server/services/campaign";
@@ -110,5 +111,19 @@ describe("75-day campaign", () => {
     expect((await res.json()).day.quests).toHaveLength(4);
     expect((await dayRoute(apiRequest("/api/campaign/day?date=nope", { cookie }))).status).toBe(400);
     expect((await dayRoute(apiRequest("/api/campaign/day?date=2026-10-28"))).status).toBe(401);
+  });
+
+  it("gives the AI a day-by-day record, so unlogged days are visible as proof", async () => {
+    await winPillars(1, ["mental", "physical"]);
+    await winPillars(3, ["spiritual"]);
+    const context = buildAiContext(await buildState(ctx(at(6))), { memories: [], restDates: ["2026-10-31"] });
+    expect(context).toContain("Daily record, last 6 days");
+    expect(context).toMatch(/- 28 Oct: 2\/4 pillars won \(Mental, Physical\), 2 missions, \d+ XP/);
+    expect(context).toContain("- 29 Oct: nothing logged");
+    expect(context).toContain("- 31 Oct: rest day, nothing logged");
+    expect(context).toContain("- 2 Nov (today): nothing logged yet (day in progress)");
+    // 29 Oct and 1 Nov: the rest day and the unfinished today are not counted as missed.
+    expect(context).toContain("Summary of those 6 days: 2 with nothing logged, 0 Four Wins days; days won per pillar: Mental 1, Physical 1, Spiritual 1, Financial 0.");
+    expect(context).toContain("Last completed mission: 30 Oct (3 days ago).");
   });
 });

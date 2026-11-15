@@ -18,6 +18,7 @@ export const MEMORY_LABELS: Record<MemoryCategory, string> = {
 
 export const SUGGESTED_QUESTIONS = [
   "What should I focus on today?",
+  "Why am I not progressing? Be honest and use my records.",
   "I have no job and no money. Help me start.",
   "Give me one thing I can do in the next hour to get closer to a job.",
   "Make me a 7-day plan to find work.",
