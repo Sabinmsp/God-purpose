@@ -174,6 +174,7 @@ export const positionSchema = z.object({
 export const settingsSchema = z.object({
   displayName: text(24).min(1).optional(),
   muted: z.boolean().optional(),
+  music: z.boolean().optional(),
   reducedMotion: z.boolean().optional(),
   showSidePanel: z.boolean().optional(),
   textScale: z.number().min(0.85).max(1.4).optional(),

@@ -240,6 +240,8 @@ export interface GameState {
 
 export interface PlayerSettings {
   muted: boolean;
+  /** Background music loop (also silent while all sound is muted). */
+  music: boolean;
   reducedMotion: boolean;
   showSidePanel: boolean;
   textScale: number;
@@ -257,6 +259,7 @@ export interface PlayerSettings {
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
   muted: false,
+  music: true,
   reducedMotion: false,
   showSidePanel: true,
   textScale: 1,

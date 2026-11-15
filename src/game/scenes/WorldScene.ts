@@ -236,6 +236,11 @@ export abstract class WorldScene extends Phaser.Scene {
           break;
         case "decoration":
           floatText(this, x, y - 52, `${DECORATION_NAMES[e.pillar]} grows`, pillarColor(e.pillar), delay + 400);
+          // Winning a pillar for the day lands with a small jolt and a ring of sparks.
+          this.time.delayedCall(delay + 300, () => {
+            burst(this, this.player.x, this.player.y - 12, "fx-spark", [pillarColor(e.pillar), 0xffffff], 18, reduced);
+            if (!reduced) this.cameras.main.shake(220, 0.0045);
+          });
           delay += 250;
           break;
         case "stage":

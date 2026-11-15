@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { api } from "@/client/api";
 import { useGame, useGameState } from "@/client/store";
-import { setMuted } from "@/game/audio";
+import { setMusicEnabled, setMuted, startMusic } from "@/game/audio";
 import { ACHIEVEMENTS } from "@/lib/shared/achievements";
 import { PILLARS, PILLAR_META } from "@/lib/shared/pillars";
 import { addDays, formatShortDate, startOfWeek } from "@/lib/shared/time";
@@ -240,9 +240,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
   const [pin, setPin] = useState({ current: "", pin: "" });
 
-  const toggle = (key: "muted" | "reducedMotion" | "showSidePanel") =>
+  const toggle = (key: "muted" | "music" | "reducedMotion" | "showSidePanel") =>
     run(async () => {
       if (key === "muted") setMuted(!st.muted);
+      if (key === "music") {
+        setMusicEnabled(!st.music);
+        // Turning music on is a tap, which browsers accept as permission to play.
+        if (!st.music) startMusic();
+      }
       await act("/api/player/settings", { [key]: !st[key] }, "PATCH");
     });
 
@@ -270,6 +275,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           {(
             [
               ["muted", st.muted ? "🔇 Sound off" : "🔊 Sound on"],
+              ["music", st.music ? "🎵 Music on" : "🎵 Music off"],
               ["reducedMotion", st.reducedMotion ? "Reduced motion: on" : "Reduced motion: off"],
               ["showSidePanel", st.showSidePanel ? "Desktop side panel: shown" : "Desktop side panel: hidden"],
             ] as const

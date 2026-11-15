@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useGame, useGameState } from "@/client/store";
 import { setView } from "@/client/view";
+import { bridge } from "@/game/bridge";
 import { play } from "@/game/audio";
 import { nextSteps } from "@/lib/shared/brief";
 import { PILLARS, PILLAR_META, type Pillar } from "@/lib/shared/pillars";
@@ -30,14 +31,16 @@ export function TodayApp() {
   return (
     <div className="today-bg relative flex h-full min-w-0 flex-1 flex-col" data-testid="today-app">
       <div ref={scroller} className="scrollbar-thin flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-md px-4 pb-8 pt-[max(1.25rem,env(safe-area-inset-top))]">{tab === "today" ? <TodayScreen /> : <ProgressScreen />}</div>
+        <div key={tab} className="anim-screen mx-auto w-full max-w-md px-4 pb-8 pt-[max(1.25rem,env(safe-area-inset-top))]">
+          {tab === "today" ? <TodayScreen /> : <ProgressScreen />}
+        </div>
       </div>
       <nav className="shrink-0 border-t border-white/10 bg-navy-900/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md" aria-label="Main">
         <div className="mx-auto grid max-w-md grid-cols-4 px-2">
           <TabButton icon="today" label="Today" active={tab === "today" && panel !== "ai"} onClick={() => (openPanel(null), setTab("today"))} />
           <TabButton icon="progress" label="Progress" active={tab === "progress" && panel !== "ai"} onClick={() => (openPanel(null), setTab("progress"))} />
           <TabButton icon="ai" label="AI" active={panel === "ai"} onClick={() => openPanel(panel === "ai" ? null : "ai")} />
-          <TabButton icon="world" label="World" onClick={() => (openPanel(null), setView("world"))} />
+          <TabButton icon="world" label="World" onClick={() => (openPanel(null), play("whoosh"), setView("world"))} />
         </div>
       </nav>
       {panel === "ai" && <AiPanel onClose={() => openPanel(null)} />}
@@ -115,17 +118,38 @@ function Header() {
   );
 }
 
+/** The pillar just won (from the server's events), for a moment: the ring pops and the card shakes. */
+function useFreshWin() {
+  const [fresh, setFresh] = useState<Pillar | null>(null);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const off = bridge.on("events", (events) => {
+      const win = events.find((e) => e.type === "decoration");
+      if (!win || win.type !== "decoration") return;
+      setFresh(win.pillar);
+      clearTimeout(timer);
+      timer = setTimeout(() => setFresh(null), 1100);
+    });
+    return () => {
+      off();
+      clearTimeout(timer);
+    };
+  }, []);
+  return fresh;
+}
+
 function TodayScreen() {
   const s = useGameState();
   const won = new Set(s.today.quests.filter((q) => q.status === "done").map((q) => q.pillar));
   const [open, setOpen] = useState<Pillar | null>(null);
+  const fresh = useFreshWin();
   const xp = PILLARS.reduce((a, p) => a + s.today.xpToday[p], 0);
   const left = 4 - won.size;
   return (
     <div className="space-y-5">
       <Header />
-      <section className="card flex flex-col items-center px-4 pb-5 pt-6" aria-label="Today's wins">
-        <WinsRing won={won} />
+      <section className={`card flex flex-col items-center px-4 pb-5 pt-6 ${fresh ? "anim-shake" : ""}`} aria-label="Today's wins">
+        <WinsRing won={won} fresh={fresh} />
         <p className="mt-4 text-center text-sm text-cream-dim">
           {won.size === 4 ? (
             <>Every pillar won. That&apos;s a Four Wins day.</>
@@ -155,7 +179,7 @@ function TodayScreen() {
 }
 
 /** Four quarter arcs that fill with each pillar's colour once it is won. */
-function WinsRing({ won }: { won: Set<Pillar> }) {
+function WinsRing({ won, fresh }: { won: Set<Pillar>; fresh: Pillar | null }) {
   const r = 70;
   const c = 2 * Math.PI * r;
   const gap = 14;
@@ -184,7 +208,7 @@ function WinsRing({ won }: { won: Set<Pillar> }) {
             stroke={won.has(p) ? PILLAR_META[p].color : "rgb(255 255 255 / .07)"}
             strokeDasharray={`${seg} ${c - seg}`}
             strokeDashoffset={-(i * (c / 4) + gap / 2)}
-            className="transition-[stroke] duration-500"
+            className={`transition-[stroke] duration-500 ${fresh === p ? "ring-flash" : ""}`}
             style={won.has(p) ? { filter: `drop-shadow(0 0 6px ${PILLAR_META[p].color}88)` } : undefined}
           />
         ))}
@@ -193,10 +217,18 @@ function WinsRing({ won }: { won: Set<Pillar> }) {
         <span
           key={p}
           aria-hidden
-          className={`absolute -ml-[18px] -mt-[18px] grid h-9 w-9 place-items-center rounded-full border-2 text-base transition ${won.has(p) ? "" : "grayscale-[.6]"}`}
+          className={`absolute -ml-[18px] -mt-[18px] grid h-9 w-9 place-items-center rounded-full border-2 text-base transition ${won.has(p) ? "" : "grayscale-[.6]"} ${fresh === p ? "badge-pop" : ""}`}
           style={{ left: spots[i][0], top: spots[i][1], background: won.has(p) ? PILLAR_META[p].soft : "var(--navy-850)", borderColor: won.has(p) ? PILLAR_META[p].color : "var(--navy-900)" }}
         >
           {PILLAR_META[p].icon}
+          {fresh === p &&
+            Array.from({ length: 8 }, (_, k) => (
+              <span
+                key={k}
+                className="badge-spark absolute left-1/2 top-1/2 block h-1.5 w-1.5 rounded-full"
+                style={{ background: k % 2 ? "#fff1b0" : PILLAR_META[p].color, ["--a" as string]: `${k * 45}deg` }}
+              />
+            ))}
         </span>
       ))}
       <div className="absolute inset-0 grid place-items-center text-center">

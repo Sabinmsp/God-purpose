@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@/client/api";
 import { GameProvider, useGame, useGameState } from "@/client/store";
 import { useView } from "@/client/view";
-import { play } from "@/game/audio";
+import { play, startMusic } from "@/game/audio";
 import { bridge, touchInput, type Focus } from "@/game/bridge";
 import { ACHIEVEMENTS_BY_KEY } from "@/lib/shared/achievements";
 import { EVOLUTION, STAGE_NAMES } from "@/lib/shared/campaign";
@@ -20,6 +20,7 @@ import { StrengthPanel } from "./panels/Strength";
 import { WealthPanel } from "./panels/Wealth";
 import { Hotbar, Hud } from "./Hud";
 import { ReminderCard } from "./Reminders";
+import { FloatingXp, LevelUpMoment, TitleScreen, WorldMusic, markTitleSeen } from "./Juice";
 import { TodayApp } from "./Today";
 import { QuestRow } from "./quests";
 import { WellbeingCard } from "./panels/Wellbeing";
@@ -52,7 +53,8 @@ function Shell() {
       {state && view === "today" ? (
         <TodayApp />
       ) : (
-        <div className="relative min-w-0 flex-1">
+        // Fade only: a transform here would re-anchor the world's fixed pop-ups to this box.
+        <div className={`relative min-w-0 flex-1 ${world ? "anim-fade" : ""}`}>
           {world && <GameCanvas />}
           {state && world && (
             <>
@@ -70,7 +72,11 @@ function Shell() {
       {state && <PanelHost />}
       {state && <DialogBox />}
       {state?.welcome && <WelcomeBack />}
+      {state && !locked && <TitleScreen />}
       <Celebration />
+      <LevelUpMoment />
+      <FloatingXp />
+      <WorldMusic />
       <Toasts />
       {locked && <PinLock />}
     </main>
@@ -365,9 +371,12 @@ function TouchControls() {
 
 function Toasts() {
   const { toasts, dismissToast } = useGame();
+  const view = useView();
+  // On the Today view toasts sit above the tab bar, so they never cover the wins ring.
+  const place = view === "world" ? "top-24 flex-col" : "bottom-[calc(4.5rem+env(safe-area-inset-bottom))] flex-col-reverse";
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-24 z-50 flex flex-col items-center gap-2 px-3" aria-live="polite">
-      {toasts.map((t) => (
+    <div className={`pointer-events-none fixed inset-x-0 z-50 flex items-center gap-2 px-3 ${place}`} aria-live="polite">
+      {(view === "world" ? toasts : toasts.slice(-3)).map((t) => (
         <button
           key={t.id}
           onClick={() => dismissToast(t.id)}
@@ -440,7 +449,17 @@ function WelcomeBack() {
             </li>
           ))}
         </ul>
-        <button className="px-btn w-full text-lg" onClick={() => (play("open"), dismissWelcome())} autoFocus>
+        <button
+          className="px-btn w-full text-lg"
+          onClick={() => {
+            play("start");
+            startMusic();
+            // The welcome-back screen stands in for today's title screen.
+            markTitleSeen(s.now.date);
+            dismissWelcome();
+          }}
+          autoFocus
+        >
           Enter the world ▸
         </button>
       </div>

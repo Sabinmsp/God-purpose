@@ -13,9 +13,14 @@ async function login(page: Page, opens: "world" | "today" = "world") {
   await page.waitForURL("/");
   if (opens === "world") await worldReady(page);
   else await expect(page.getByTestId("today-app")).toBeVisible({ timeout: 30_000 });
+  // The game opens on either the welcome-back screen or the daily title screen (never both).
   const welcome = page.getByTestId("welcome");
+  const title = page.getByTestId("title-screen");
+  await welcome.or(title).first().waitFor({ timeout: 5_000 }).catch(() => {});
   if (await welcome.isVisible().catch(() => false)) await welcome.getByRole("button").click();
-  await expect(page.getByTestId("welcome")).toBeHidden();
+  if (await title.isVisible().catch(() => false)) await title.getByRole("button", { name: /Continue/ }).click();
+  await expect(welcome).toBeHidden();
+  await expect(title).toBeHidden();
 }
 
 async function state(page: Page) {
@@ -104,7 +109,8 @@ test("first visit: welcome screen, real progress, and persistence", async ({ pag
   expect(before.stats.overall.totalXp).toBe(0);
   expect(before.savings.totalBalanceCents).toBe(0);
 
-  // Complete a real quest from the board.
+  // Complete a real quest from the board (Q is handled by the world, so wait for it to be live).
+  await worldReady(page);
   await page.keyboard.press("q");
   const board = page.getByRole("dialog", { name: "The Daily Four Wins" });
   await expect(board).toBeVisible();
