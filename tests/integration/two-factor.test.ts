@@ -8,7 +8,7 @@ import { GET as getState } from "@/app/api/state/route";
 import { GET as exportData } from "@/app/api/export/route";
 import { LIMITS } from "@/lib/server/auth/rate-limit";
 import { base32Decode, base32Encode, decryptSecret, stepAt, totpAt, verifyTotp } from "@/lib/server/auth/totp";
-import { TEST_PASSWORD, apiRequest, closeDb, resetDb, sessionCookie } from "../helpers/db";
+import { TEST_USERNAME, TEST_PASSWORD, apiRequest, closeDb, resetDb, sessionCookie } from "../helpers/db";
 
 let base: Awaited<ReturnType<typeof resetDb>>;
 beforeEach(async () => {
@@ -16,7 +16,7 @@ beforeEach(async () => {
 });
 afterAll(closeDb);
 
-const tryLogin = (body: { password: string; code?: string }, ip = "198.51.100.1") => login(apiRequest("/api/auth/login", { body, ip }));
+const tryLogin = (body: { password: string; code?: string }, ip = "198.51.100.1") => login(apiRequest("/api/auth/login", { body: { username: TEST_USERNAME, ...body }, ip }));
 const nextCode = (secret: string, offset = 1) => totpAt(secret, stepAt(new Date()) + offset);
 
 /** Turns 2FA on through the real API and returns the secret and recovery codes. */

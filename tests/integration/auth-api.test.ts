@@ -11,7 +11,7 @@ import { hashSecret } from "@/lib/server/auth/password";
 import { LIMITS } from "@/lib/server/auth/rate-limit";
 import { PIN_LOCK_IDLE_MS, SESSION_IDLE_MS, SESSION_TTL_MS, createSession, validateSession } from "@/lib/server/auth/session";
 import { pillarXp } from "@/lib/server/services/progress";
-import { TEST_PASSWORD, apiRequest, closeDb, params, resetDb, rid, sessionCookie } from "../helpers/db";
+import { TEST_PASSWORD, TEST_USERNAME, apiRequest, closeDb, params, resetDb, rid, sessionCookie } from "../helpers/db";
 
 let base: Awaited<ReturnType<typeof resetDb>>;
 beforeEach(async () => {
@@ -19,8 +19,8 @@ beforeEach(async () => {
 });
 afterAll(closeDb);
 
-const tryLogin = (password: string, ip = "198.51.100.1", origin?: string | null) =>
-  login(apiRequest("/api/auth/login", { body: { password }, ip, origin }));
+const tryLogin = (password: string, ip = "198.51.100.1", origin?: string | null, username = TEST_USERNAME) =>
+  login(apiRequest("/api/auth/login", { body: { username, password }, ip, origin }));
 
 describe("login", () => {
   it("rejects a wrong password and accepts the right one with a hardened cookie", async () => {
@@ -38,7 +38,9 @@ describe("login", () => {
 
   it("rejects malformed bodies and cross-site login attempts", async () => {
     expect((await login(apiRequest("/api/auth/login", { body: "{bad json" }))).status).toBe(400);
-    expect((await login(apiRequest("/api/auth/login", { body: { password: TEST_PASSWORD }, contentType: "text/plain" }))).status).toBe(415);
+    expect((await login(apiRequest("/api/auth/login", { body: { username: TEST_USERNAME, password: TEST_PASSWORD }, contentType: "text/plain" }))).status).toBe(415);
+    // The username is required now that there are many accounts.
+    expect((await login(apiRequest("/api/auth/login", { body: { password: TEST_PASSWORD } }))).status).toBe(400);
     expect((await tryLogin(TEST_PASSWORD, undefined, "https://evil.example")).status).toBe(403);
     expect((await tryLogin(TEST_PASSWORD, undefined, null)).status).toBe(403);
   });
@@ -52,9 +54,24 @@ describe("login", () => {
     expect((await tryLogin(TEST_PASSWORD, "198.51.100.99")).status).toBe(200);
   });
 
-  it("locks all logins after distributed guessing across many IPs", async () => {
-    for (let i = 0; i < LIMITS.global.max; i++) await tryLogin(`wrong-${i}`, `192.0.2.${i + 1}`);
+  it("accepts the username in any case and gives the same answer for unknown users and wrong passwords", async () => {
+    expect((await tryLogin(TEST_PASSWORD, undefined, undefined, "  SaBin ")).status).toBe(200);
+    const unknown = await (await tryLogin(TEST_PASSWORD, "198.51.100.2", undefined, "nobody_here")).json();
+    const wrong = await (await tryLogin("nope", "198.51.100.3")).json();
+    expect(unknown).toEqual(wrong);
+  });
+
+  it("locks one account after distributed guessing across many IPs, without locking anyone else out", async () => {
+    for (let i = 0; i < LIMITS.account.max; i++) await tryLogin(`wrong-${i}`, `192.0.2.${i + 1}`);
     expect((await tryLogin(TEST_PASSWORD, "192.0.2.200")).status).toBe(429);
+    const [other] = await base.sql<{ id: string }[]>`insert into players (display_name) values ('Ana') returning id`;
+    await base.sql`insert into auth_credentials (player_id, username, password_hash) values (${other.id}, 'ana', ${await hashSecret("ana password 123")})`;
+    expect((await tryLogin("ana password 123", "192.0.2.201", undefined, "ana")).status).toBe(200);
+  });
+
+  it("locks all logins when failures across the whole server pass the ceiling", async () => {
+    await base.sql`insert into login_attempts (bucket, kind, success) select 'global', 'password', false from generate_series(1, ${LIMITS.global.max})`;
+    expect((await tryLogin(TEST_PASSWORD, "192.0.2.250")).status).toBe(429);
   });
 });
 

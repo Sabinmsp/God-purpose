@@ -68,12 +68,19 @@ export function readCompatibleReply(raw: string): AiReply | null {
   return text.startsWith("{") ? null : { reply: text, proposed_missions: [], proposed_memories: [] };
 }
 
+/** Which settings to point at in error messages, so a backup's problem names the backup's variables. */
+interface EnvHints {
+  key: string;
+  model: string;
+}
+
 export class OpenAiCompatibleProvider implements AiProvider {
   constructor(
     readonly name: string,
     private baseUrl: string,
     readonly model: string,
     private apiKey: string | null,
+    private hints: EnvHints = { key: "AI_API_KEY", model: "AI_MODEL" },
   ) {}
 
   async reply(req: AiRequest): Promise<AiReply> {
@@ -122,23 +129,30 @@ export class OpenAiCompatibleProvider implements AiProvider {
   private async failure(res: Response): Promise<AiError> {
     const detail = (await res.text().catch(() => "")).slice(0, 300);
     console.error("[ai] provider error", this.name, res.status, detail);
-    if (res.status === 401 || res.status === 403) return new AiError("auth", "The AI provider rejected the server's key. Check AI_API_KEY.");
+    if (res.status === 401 || res.status === 403) return new AiError("auth", `The AI provider rejected the server's key. Check ${this.hints.key}.`);
     // 413 is how free tiers report a request larger than the per-minute token allowance.
     if (res.status === 429 || res.status === 413) return new AiError("rate_limited", "The free AI has hit its limit for now. Wait a minute and try again.");
-    if (res.status === 404) return new AiError("unavailable", `The AI service doesn't know the model "${this.model}". Check AI_MODEL.`);
+    if (res.status === 404) return new AiError("unavailable", `The AI service doesn't know the model "${this.model}". Check ${this.hints.model}.`);
     return new AiError("unavailable", "The AI service had a problem. Please try again shortly.");
   }
 }
 
-/** Builds the provider from server-only environment variables, or null when it isn't fully configured. */
-export function compatibleProviderFromEnv(name: string): AiProvider | null {
+/**
+ * Builds the provider from server-only environment variables, or null when it isn't fully configured.
+ * The main provider reads AI_*; the backup reads AI_FALLBACK_*, so each can have its own key and model.
+ * Either one also accepts the service's own key name (GROQ_API_KEY, OPENROUTER_API_KEY).
+ */
+export function compatibleProviderFromEnv(name: string, role: "primary" | "fallback" = "primary"): AiProvider | null {
   const preset = COMPATIBLE_PRESETS[name];
   if (!preset) return null;
-  const baseUrl = process.env.AI_BASE_URL || preset.baseUrl;
-  const model = process.env.AI_MODEL || preset.model;
-  const apiKey = process.env.AI_API_KEY || (preset.keyEnv ? process.env[preset.keyEnv] : undefined) || null;
+  const prefix = role === "primary" ? "AI_" : "AI_FALLBACK_";
+  const env = (suffix: string) => process.env[prefix + suffix] || undefined;
+  const baseUrl = env("BASE_URL") || preset.baseUrl;
+  const model = env("MODEL") || preset.model;
+  const apiKey = env("API_KEY") || (preset.keyEnv ? process.env[preset.keyEnv] : undefined) || null;
   if (!baseUrl || !model) return null;
   // Hosted services need a key; a model on your own machine does not.
   if (preset.keyEnv && !apiKey) return null;
-  return new OpenAiCompatibleProvider(name, baseUrl, model, apiKey);
+  const keyHint = role === "primary" ? "AI_API_KEY" : (preset.keyEnv ?? "AI_FALLBACK_API_KEY");
+  return new OpenAiCompatibleProvider(name, baseUrl, model, apiKey, { key: keyHint, model: `${prefix}MODEL` });
 }

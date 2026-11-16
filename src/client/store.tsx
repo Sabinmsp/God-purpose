@@ -6,9 +6,10 @@ import { DECORATION_NAMES, EVOLUTION } from "@/lib/shared/campaign";
 import { PILLAR_META } from "@/lib/shared/pillars";
 import type { GameEvent, GameState, MutationResult } from "@/lib/shared/types";
 import { UNLOCKS_BY_KEY } from "@/lib/shared/unlocks";
-import { play, setMuted } from "@/game/audio";
+import { play, setMusicEnabled, setMuted } from "@/game/audio";
 import { bridge, type Dialog, type PanelId } from "@/game/bridge";
 import { ApiError, api } from "./api";
+import { getView } from "./view";
 
 export interface Toast {
   id: number;
@@ -37,6 +38,11 @@ interface Store {
   applyResult: (res: Pick<MutationResult, "state" | "events">) => GameEvent[];
   /** Set for a few seconds after a complete Four Wins day. */
   celebration: { day: number; total: number } | null;
+  /** Set for a few seconds after an overall level-up (not shown during a Four Wins celebration). */
+  levelUp: { level: number } | null;
+  /** The daily title screen covers the game, so movement pauses while it is open. */
+  titleOpen: boolean;
+  setTitleOpen: (open: boolean) => void;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -56,9 +62,16 @@ export function useGameState(): GameState {
 
 let toastId = 0;
 
-function eventToasts(events: GameEvent[]): Omit<Toast, "id">[] {
+/**
+ * Toasts for a batch of events. With animations on, an overall level gets its
+ * own full-screen moment and, on the Today view, XP floats up from where you
+ * tapped, so those toasts are left out; with reduced motion they are the only signal.
+ */
+function eventToasts(events: GameEvent[], skip: { xp: boolean; overallLevel: boolean }): Omit<Toast, "id">[] {
   const out: Omit<Toast, "id">[] = [];
   for (const e of events) {
+    if (skip.xp && e.type === "xp") continue;
+    if (skip.overallLevel && e.type === "levelup" && e.pillar === "overall") continue;
     if (e.type === "xp") out.push({ kind: "xp", title: `+${e.amount} ${PILLAR_META[e.pillar].name} XP`, color: PILLAR_META[e.pillar].color });
     if (e.type === "levelup")
       out.push({
@@ -95,6 +108,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [celebration, setCelebration] = useState<{ day: number; total: number } | null>(null);
+  const [levelUp, setLevelUp] = useState<{ level: number } | null>(null);
+  const [titleOpen, setTitleOpen] = useState(false);
   const stateRef = useRef<GameState | null>(null);
 
   const toast = useCallback((t: Omit<Toast, "id">) => {
@@ -108,6 +123,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     stateRef.current = s;
     setState(s);
     setMuted(s.player.settings.muted);
+    setMusicEnabled(s.player.settings.music ?? true);
     bridge.emit("state", s);
   }, []);
 
@@ -146,13 +162,29 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const events = res.events ?? [];
       if (events.length) {
         bridge.emit("events", events);
-        eventToasts(events).forEach(toast);
+        const reduced = res.state.player.settings.reducedMotion || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         const fourWins = events.find((e) => e.type === "fourwins");
+        const overall = events.find((e) => e.type === "levelup" && e.pillar === "overall");
+        const toasts = eventToasts(events, { xp: !reduced && getView() !== "world", overallLevel: !reduced });
+        // A level-up moment gets the screen to itself; the rest of the news follows it.
+        if (overall && !fourWins && !reduced) setTimeout(() => toasts.forEach(toast), 3400);
+        else toasts.forEach(toast);
+        const showLevelUp = (level: number) => {
+          setLevelUp({ level });
+          setTimeout(() => setLevelUp(null), 3800);
+          play("levelup");
+        };
         if (fourWins) {
           setCelebration({ day: fourWins.day, total: fourWins.total });
           setTimeout(() => setCelebration(null), 5200);
           play("fanfare");
+          // A level reached on the same tap gets its own moment once the celebration ends.
+          if (overall && overall.type === "levelup") setTimeout(() => showLevelUp(overall.level), 5400);
+        } else if (overall && overall.type === "levelup") {
+          showLevelUp(overall.level);
         } else if (events.some((e) => e.type === "levelup" || e.type === "stage")) play("levelup");
+        // The first win in a pillar today grows that district.
+        else if (events.some((e) => e.type === "decoration")) play("win");
         else if (events.some((e) => e.type === "unlock" || e.type === "achievement")) play("unlock");
         else if (events.some((e) => e.type === "action" && e.pillar === "financial")) play("coin");
         else if (events.some((e) => e.type === "xp")) play("complete");
@@ -201,9 +233,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
     };
   }, [refresh, openPanel]);
 
+  // What else is covering the game, so closing the welcome screen can unpause it at once.
+  const otherCovers = useRef(false);
   useEffect(() => {
-    bridge.emit("ui-blocking", Boolean(panel || dialog || locked || state?.welcome));
-  }, [panel, dialog, locked, state?.welcome]);
+    otherCovers.current = Boolean(panel || dialog || locked || titleOpen);
+    bridge.emit("ui-blocking", Boolean(otherCovers.current || state?.welcome));
+  }, [panel, dialog, locked, state?.welcome, titleOpen]);
 
   const value = useMemo<Store>(
     () => ({
@@ -221,13 +256,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
       toast,
       dismissToast,
       celebration,
+      levelUp,
+      titleOpen,
+      setTitleOpen,
       applyResult,
       dismissWelcome: () => {
         if (stateRef.current) apply({ ...stateRef.current, welcome: null });
+        // Unpause straight away rather than after the next render, so the first key press counts.
+        bridge.emit("ui-blocking", otherCovers.current);
         void api("/api/welcome/ack", { body: {} }).catch(() => {});
       },
     }),
-    [state, loading, locked, panel, dialog, toasts, celebration, openPanel, act, refresh, toast, dismissToast, apply, applyResult],
+    [state, loading, locked, panel, dialog, toasts, celebration, levelUp, titleOpen, openPanel, act, refresh, toast, dismissToast, apply, applyResult],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
