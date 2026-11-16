@@ -72,7 +72,8 @@ export function buildVillage() {
   const ground: number[][] = Array.from({ length: H }, () =>
     Array.from({ length: W }, () => {
       const v = r();
-      return v < 0.06 ? T.GRASS_FLOWERS : v < 0.1 ? T.GRASS_FLOWERS_B : v < 0.35 ? T.GRASS_TUFT : T.GRASS;
+      // Same draws as before (the rest of the layout depends on them); fewer flower tiles.
+      return v < 0.03 ? T.GRASS_FLOWERS : v < 0.05 ? T.GRASS_FLOWERS_B : v < 0.1 ? T.GRASS : v < 0.35 ? T.GRASS_TUFT : T.GRASS;
     }),
   );
   const blocked: boolean[][] = Array.from({ length: H }, () => Array(W).fill(false));

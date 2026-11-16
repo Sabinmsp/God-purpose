@@ -117,7 +117,8 @@ function GameCanvas() {
       el.setAttribute("data-lanterns", String(w.lanterns));
       el.setAttribute("data-stages", JSON.stringify(w.stages));
     });
-    void import("@/game/createGame").then(({ createGame }) => {
+    // The asset pack sheets are decoded before Phaser draws any texture.
+    void Promise.all([import("@/game/createGame"), import("@/game/art/pack").then((m) => m.loadPack())]).then(([{ createGame }]) => {
       if (cancelled || !ref.current) return;
       game = createGame(ref.current);
       if (process.env.NODE_ENV === "development") Object.assign(window, { __fourWins: { game, bridge } });

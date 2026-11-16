@@ -1,3 +1,4 @@
+import { layered, packTile } from "./pack";
 import { Pixels, rng } from "./paint";
 
 export const TILE = 16;
@@ -175,33 +176,38 @@ function tatami() {
 
 export function buildTileset(): Pixels {
   const tiles: Pixels[] = [];
-  tiles[T.GRASS] = grass(2);
-  tiles[T.GRASS_TUFT] = grass(3);
-  tiles[T.GRASS_FLOWERS] = grass(4, ["#f2efe4", "#f2c14e"]);
-  tiles[T.GRASS_DARK] = (() => {
-    const p = grass(6);
-    p.swap(G.base, "#447e3e");
-    return p;
-  })();
-  tiles[T.PATH] = path(false, 9);
-  tiles[T.PATH_PEBBLE] = path(true, 13);
+  // Natural ground comes from the Ninja Adventure pack when it is loaded (see
+  // ./pack); built floors (plaza, market, zen garden, interiors) stay procedural.
+  const grassTile = () => packTile("floor", 0, 12);
+  tiles[T.GRASS] = grassTile() ?? grass(2);
+  tiles[T.GRASS_TUFT] = packTile("floor", 4, 12) ?? grass(3);
+  tiles[T.GRASS_FLOWERS] = layered(grassTile(), packTile("detail", 2, 0)) ?? grass(4, ["#f2efe4", "#f2c14e"]);
+  tiles[T.GRASS_DARK] =
+    packTile("floor", 2, 12) ??
+    (() => {
+      const p = grass(6);
+      p.swap(G.base, "#447e3e");
+      return p;
+    })();
+  tiles[T.PATH] = packTile("floor", 1, 8) ?? path(false, 9);
+  tiles[T.PATH_PEBBLE] = packTile("floor", 1, 11) ?? path(true, 13);
   tiles[T.STONE] = stone(false);
   tiles[T.STONE_ALT] = stone(true);
-  tiles[T.WATER_A] = water(0, false);
-  tiles[T.WATER_B] = water(1, false);
-  tiles[T.SHORE_A] = water(0, true);
-  tiles[T.SHORE_B] = water(1, true);
+  tiles[T.WATER_A] = packTile("water", 1, 7) ?? water(0, false);
+  tiles[T.WATER_B] = packTile("water", 11, 2) ?? water(1, false);
+  tiles[T.SHORE_A] = packTile("water", 1, 6) ?? water(0, true);
+  tiles[T.SHORE_B] = packTile("water", 1, 6) ?? water(1, true);
   tiles[T.GRAVEL] = gravel(false);
   tiles[T.GRAVEL_RAKED] = gravel(true);
   tiles[T.WOOD] = wood(false);
   tiles[T.WOOD_ALT] = wood(true);
   tiles[T.WALL] = wall(false);
   tiles[T.WALL_BASE] = wall(true);
-  tiles[T.MEADOW] = meadow();
-  tiles[T.CLAY] = clay();
+  tiles[T.MEADOW] = packTile("floor", 3, 12) ?? meadow();
+  tiles[T.CLAY] = packTile("floor", 12, 8) ?? clay();
   tiles[T.GOLD_STONE] = stone(false, true);
-  tiles[T.BRIDGE] = bridge();
-  tiles[T.GRASS_FLOWERS_B] = grass(8, ["#f08aa8", "#fff1f5"]);
+  tiles[T.BRIDGE] = packTile("water", 2, 13) ?? bridge();
+  tiles[T.GRASS_FLOWERS_B] = layered(grassTile(), packTile("detail", 5, 2)) ?? grass(8, ["#f08aa8", "#fff1f5"]);
   tiles[T.TATAMI] = tatami();
   const out = new Pixels(TILE * 8, TILE * Math.ceil(tiles.length / 8));
   tiles.forEach((t, i) => out.blit(t, (i % 8) * TILE, Math.floor(i / 8) * TILE));

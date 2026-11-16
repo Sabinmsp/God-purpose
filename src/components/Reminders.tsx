@@ -112,8 +112,11 @@ export function ReminderCard({ floating = false }: { floating?: boolean }) {
   );
   return (
     <section
+      // Floating over the world on a phone, it sits above the touch joystick and
+      // action buttons (which reach ~9.75rem up from the bottom), never on them:
+      // covering them would leave the character unable to move until dismissed.
       className={`${status === "ready" ? "border-gold/40 p-5" : "px-4 py-3"} card ${
-        floating ? "fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-30 mx-auto max-w-md shadow-2xl md:bottom-auto md:top-28" : ""
+        floating ? "fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+10.5rem)] z-30 mx-auto max-w-md shadow-2xl md:bottom-auto md:top-28" : ""
       }`}
       data-testid="reminder-card"
       aria-labelledby="reminder-card-title"

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/client/api";
 import { useGameState } from "@/client/store";
+import { loadPack } from "@/game/art/pack";
 import { renderVillage, type SnapshotState } from "@/game/snapshot";
 import { worldStages } from "@/game/world/growth";
 import { ACHIEVEMENTS_BY_KEY } from "@/lib/shared/achievements";
@@ -40,11 +41,19 @@ function VillageSnapshot({ state, label }: { state: SnapshotState; label: string
   const ref = useRef<HTMLCanvasElement>(null);
   const key = JSON.stringify(state);
   useEffect(() => {
-    const src = renderVillage(JSON.parse(key));
-    const c = ref.current!;
-    c.width = src.width;
-    c.height = src.height;
-    c.getContext("2d")!.drawImage(src, 0, 0);
+    let live = true;
+    // Same art as the live world, so wait for the asset pack (instant once loaded).
+    void loadPack().then(() => {
+      const c = ref.current;
+      if (!live || !c) return;
+      const src = renderVillage(JSON.parse(key));
+      c.width = src.width;
+      c.height = src.height;
+      c.getContext("2d")!.drawImage(src, 0, 0);
+    });
+    return () => {
+      live = false;
+    };
   }, [key]);
   return <canvas ref={ref} className="block h-auto w-full" style={{ imageRendering: "pixelated" }} role="img" aria-label={label} />;
 }

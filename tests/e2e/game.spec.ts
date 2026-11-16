@@ -194,6 +194,14 @@ test("another device sees the same character, goals, balances and unlocks", asyn
   await expect(page.getByTestId("joystick")).toBeVisible();
   await expect(page.getByTestId("action-button")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  // Nothing floats over the controls (e.g. the reminder prompt): a covered joystick can't be touched.
+  for (const id of ["joystick", "action-button"]) {
+    const onTop = await page.getByTestId(id).evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+    });
+    expect(onTop, `${id} is covered by another element`).toBe(true);
+  }
 
   // Drag the joystick left: the character walks and the new position is saved.
   const startX = s.player.position.x ?? 512;
