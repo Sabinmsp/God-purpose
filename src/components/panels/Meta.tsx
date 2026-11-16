@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { api } from "@/client/api";
 import { useGame, useGameState } from "@/client/store";
-import { setMuted } from "@/game/audio";
+import { setMusicEnabled, setMuted, startMusic } from "@/game/audio";
 import { ACHIEVEMENTS } from "@/lib/shared/achievements";
 import { PILLARS, PILLAR_META } from "@/lib/shared/pillars";
 import { addDays, formatShortDate, startOfWeek } from "@/lib/shared/time";
@@ -240,9 +240,14 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const [pw, setPw] = useState({ current: "", next: "", confirm: "" });
   const [pin, setPin] = useState({ current: "", pin: "" });
 
-  const toggle = (key: "muted" | "reducedMotion" | "showSidePanel") =>
+  const toggle = (key: "muted" | "music" | "reducedMotion" | "showSidePanel") =>
     run(async () => {
       if (key === "muted") setMuted(!st.muted);
+      if (key === "music") {
+        setMusicEnabled(!st.music);
+        // Turning music on is a tap, which browsers accept as permission to play.
+        if (!st.music) startMusic();
+      }
       await act("/api/player/settings", { [key]: !st[key] }, "PATCH");
     });
 
@@ -270,6 +275,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           {(
             [
               ["muted", st.muted ? "🔇 Sound off" : "🔊 Sound on"],
+              ["music", st.music ? "🎵 Music on" : "🎵 Music off"],
               ["reducedMotion", st.reducedMotion ? "Reduced motion: on" : "Reduced motion: off"],
               ["showSidePanel", st.showSidePanel ? "Desktop side panel: shown" : "Desktop side panel: hidden"],
             ] as const
@@ -302,6 +308,9 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         </div>
       </Section>
       <Section title="Security">
+        <p className="mb-3 text-sm text-cream-dim" data-testid="signed-in-as">
+          Signed in as <span className="font-pixel text-cream">@{s.security.username}</span>. Use this username to log in on other devices.
+        </p>
         {s.security.weakPassword && (
           <p className="px-card mb-3 border-l-4 !border-l-[var(--danger)] p-3 text-sm">
             ⚠️ Your access password is short or numeric-only. Before storing real financial records on a public URL, switch to a long passphrase and keep a short PIN for quick unlocks.
@@ -364,6 +373,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
       >
         Log out
       </button>
+      <DeleteAccount />
     </Sheet>
   );
 }
@@ -421,5 +431,51 @@ export function GuidePanel({ onClose }: { onClose: () => void }) {
         </article>
       )}
     </Sheet>
+  );
+}
+
+/** Permanently removes the account and every record in it, after the password is typed again. */
+function DeleteAccount() {
+  const { toast } = useGame();
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  if (!open) {
+    return (
+      <button className="px-ghost mt-3 w-full text-xs text-danger" onClick={() => setOpen(true)}>
+        Delete my account…
+      </button>
+    );
+  }
+  return (
+    <form
+      className="px-card mt-3 space-y-2 border-l-4 !border-l-[var(--danger)] p-3"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!password || busy) return;
+        if (!confirm("Delete your account and all your progress forever? This can't be undone.")) return;
+        setBusy(true);
+        try {
+          await api("/api/auth/account", { method: "DELETE", body: { password } });
+          window.location.replace("/login");
+        } catch (err) {
+          toast({ kind: "error", title: err instanceof Error ? err.message : "Could not delete the account" });
+          setBusy(false);
+        }
+      }}
+    >
+      <p className="text-sm">
+        This deletes your character, quests, XP, journal, money records, AI chat and memories for good. Export a backup first if you want to keep anything.
+      </p>
+      <input className="px-input" type="password" autoComplete="current-password" placeholder="Your password" value={password} onChange={(e) => setPassword(e.target.value)} aria-label="Password to confirm" />
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" className="px-btn secondary" onClick={() => (setOpen(false), setPassword(""))}>
+          Cancel
+        </button>
+        <button className="px-btn danger" disabled={busy || !password}>
+          Delete forever
+        </button>
+      </div>
+    </form>
   );
 }

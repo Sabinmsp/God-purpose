@@ -1,8 +1,13 @@
 /**
  * One-time (and repeatable) setup:
- *   npm run setup            → migrate, create the player if needed, set the access password
+ *   npm run setup            → migrate, create the first player if needed, set their password
  *   npm run setup -- --pin   → also set a 4–8 digit unlock PIN
  *   npm run setup -- --reset-2fa → also turn off two-factor login (lost phone)
+ *   npm run setup -- --user <username> → act on that account instead (e.g. reset a
+ *                              player's forgotten password); other players sign up in the app
+ *
+ * The first player's username comes from FW_USERNAME, or from their name
+ * ("Sabin" → "sabin"). Every player logs in with their username and password.
  *
  * The password is read from a hidden prompt (or FW_PASSWORD / FW_PIN for
  * non-interactive use) and only its scrypt hash is stored in the database.
@@ -55,6 +60,13 @@ async function readSecret(envName: string, label: string, validate: (v: string) 
   }
 }
 
+/** A valid username from a name: lowercase letters, numbers and underscores, 3–24 long. */
+function usernameFor(name: string): string {
+  const base = name.toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 24);
+  if (base.length < 3) throw new Error(`Can't make a username from "${name}". Set FW_USERNAME (3–24 letters, numbers or underscores).`);
+  return base;
+}
+
 async function main() {
   const url = process.env.DATABASE_URL || process.env.POSTGRES_URL_NON_POOLING || process.env.POSTGRES_URL;
   if (!url) throw new Error("DATABASE_URL is not set.");
@@ -65,19 +77,33 @@ async function main() {
     console.log("\nFour Wins — setup\n");
     await runMigrations(sql);
 
-    type PlayerRow = { id: string; display_name: string };
-    let [player]: (PlayerRow | undefined)[] = await sql<PlayerRow[]>`select id, display_name from players order by created_at limit 1`;
+    type PlayerRow = { id: string; display_name: string; username: string | null };
+    const userArg = process.argv.indexOf("--user");
+    const wanted = userArg >= 0 ? (process.argv[userArg + 1] ?? "").trim().toLowerCase() : null;
+    let player: PlayerRow | undefined;
+    if (wanted) {
+      [player] = await sql<PlayerRow[]>`
+        select p.id, p.display_name, c.username from players p join auth_credentials c on c.player_id = p.id where c.username = ${wanted}
+      `;
+      if (!player) throw new Error(`No account with the username "${wanted}".`);
+      console.log(`  ✓ found account @${player.username} (“${player.display_name}”)`);
+    } else {
+      [player] = await sql<PlayerRow[]>`
+        select p.id, p.display_name, c.username from players p left join auth_credentials c on c.player_id = p.id order by p.created_at limit 1
+      `;
+    }
     if (!player) {
       const name = process.env.FW_PLAYER_NAME || "Sabin";
       player = await sql.begin(async (tx) => {
-        const [created] = await tx<PlayerRow[]>`insert into players (display_name) values (${name}) returning id, display_name`;
+        const [created] = await tx<PlayerRow[]>`insert into players (display_name) values (${name}) returning id, display_name, null::text as username`;
         await seedPlayer(tx, created.id, localDate());
         return created;
       });
       console.log(`  ✓ created player “${player.display_name}” with default quests, goals and vaults`);
-    } else {
+    } else if (!wanted) {
       console.log(`  ✓ player “${player.display_name}” already exists — progress untouched`);
     }
+    const username = player.username ?? usernameFor(process.env.FW_USERNAME || player.display_name);
 
     const password = await readSecret("FW_PASSWORD", "Access password", (v) =>
       v.length < 4 ? "Use at least 4 characters." : v.length > 256 ? "Too long." : null,
@@ -85,13 +111,13 @@ async function main() {
     const weak = isWeakPassword(password);
     const hash = await hashSecret(password);
     await sql`
-      insert into auth_credentials (player_id, password_hash, password_weak) values (${player.id}, ${hash}, ${weak})
+      insert into auth_credentials (player_id, username, password_hash, password_weak) values (${player.id}, ${username}, ${hash}, ${weak})
       on conflict (player_id) do update set password_hash = excluded.password_hash,
         password_weak = excluded.password_weak, updated_at = now()
     `;
     // A password change signs out every existing session.
     await sql`update sessions set revoked_at = now() where player_id = ${player.id} and revoked_at is null`;
-    console.log("  ✓ access password set (stored as a scrypt hash)");
+    console.log(`  ✓ password set for @${username} (stored as a scrypt hash). Log in with username “${username}”.`);
     if (weak) {
       console.log(
         "\n  ⚠  This password is short or numeric-only. Login is rate-limited, but before you\n" +

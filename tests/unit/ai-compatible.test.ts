@@ -2,9 +2,10 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { OpenAiCompatibleProvider, compatibleProviderFromEnv, readCompatibleReply } from "@/lib/server/ai/openai-compatible";
-import { getAiProvider } from "@/lib/server/ai/provider";
+import { AiError, FallbackProvider, getAiProvider, type AiProvider } from "@/lib/server/ai/provider";
 
 interface Seen {
+  path: string | undefined;
   auth: string | undefined;
   body: { model: string; response_format?: unknown; messages: { role: string; content: string }[] };
 }
@@ -12,15 +13,15 @@ interface Seen {
 let server: Server;
 let url: string;
 let seen: Seen[] = [];
-let respond: (n: number) => { status: number; content?: string };
+let respond: (n: number, path: string) => { status: number; content?: string };
 
 beforeAll(async () => {
   server = createServer((req, res) => {
     let raw = "";
     req.on("data", (c) => (raw += c));
     req.on("end", () => {
-      seen.push({ auth: req.headers.authorization, body: JSON.parse(raw) });
-      const r = respond(seen.length);
+      seen.push({ path: req.url, auth: req.headers.authorization, body: JSON.parse(raw) });
+      const r = respond(seen.length, req.url ?? "");
       res.writeHead(r.status, { "content-type": "application/json" });
       res.end(JSON.stringify(r.status === 200 ? { choices: [{ message: { role: "assistant", content: r.content } }] } : { error: { message: "nope" } }));
     });
@@ -31,7 +32,7 @@ beforeAll(async () => {
 afterAll(() => new Promise((done) => server.close(done)));
 afterEach(() => {
   seen = [];
-  for (const k of ["AI_PROVIDER", "AI_API_KEY", "AI_BASE_URL", "AI_MODEL", "GROQ_API_KEY"]) delete process.env[k];
+  for (const k of ["AI_PROVIDER", "AI_API_KEY", "AI_BASE_URL", "AI_MODEL", "GROQ_API_KEY", "AI_FALLBACK", "AI_FALLBACK_API_KEY", "AI_FALLBACK_MODEL", "OPENROUTER_API_KEY"]) delete process.env[k];
 });
 
 const request = { system: "SYSTEM", history: [], context: "<game_data>\nx\n</game_data>", message: "Why am I not progressing?" };
@@ -107,5 +108,63 @@ describe("open-source models over the OpenAI-compatible API", () => {
     process.env.AI_MODEL = "local-model";
     expect(compatibleProviderFromEnv("ollama")).toMatchObject({ name: "ollama", model: "local-model" });
     expect(compatibleProviderFromEnv("nonsense")).toBeNull();
+  });
+});
+
+describe("backup AI when the main one is busy", () => {
+  const groq = () => new OpenAiCompatibleProvider("groq", `${url.replace(/\/v1$/, "")}/groq/v1`, "big-model", "groq-key");
+  const backup = () => new OpenAiCompatibleProvider("openrouter", `${url.replace(/\/v1$/, "")}/openrouter/v1`, "free-model", "or-key", { key: "OPENROUTER_API_KEY", model: "AI_FALLBACK_MODEL" });
+
+  it("asks the backup when the main AI is at its limit", async () => {
+    respond = (_, path) => (path.startsWith("/groq") ? { status: 429 } : { status: 200, content: good });
+    const reply = await new FallbackProvider(groq(), backup()).reply(request);
+    expect(reply.reply).toBe("Three days had nothing logged.");
+    expect(seen.map((x) => [x.path, x.auth, x.body.model])).toEqual([
+      ["/groq/v1/chat/completions", "Bearer groq-key", "big-model"],
+      ["/openrouter/v1/chat/completions", "Bearer or-key", "free-model"],
+    ]);
+  });
+
+  it("only uses the main AI when it answers", async () => {
+    respond = () => ({ status: 200, content: good });
+    await new FallbackProvider(groq(), backup()).reply(request);
+    expect(seen).toHaveLength(1);
+  });
+
+  it("explains when both are busy, and names the backup's settings when the backup is misconfigured", async () => {
+    respond = () => ({ status: 429 });
+    await expect(new FallbackProvider(groq(), backup()).reply(request)).rejects.toMatchObject({
+      kind: "rate_limited",
+      message: "Both free AIs are at their limit right now. Wait a minute and try again.",
+    });
+    respond = (_, path) => (path.startsWith("/groq") ? { status: 429 } : { status: 401 });
+    await expect(new FallbackProvider(groq(), backup()).reply(request)).rejects.toMatchObject({ kind: "auth", message: expect.stringContaining("Check OPENROUTER_API_KEY") });
+  });
+
+  it("never retries a refusal on the backup", async () => {
+    const refusing: AiProvider = { name: "x", model: "x", reply: async () => Promise.reject(new AiError("refused", "declined")) };
+    respond = () => ({ status: 200, content: good });
+    await expect(new FallbackProvider(refusing, backup()).reply(request)).rejects.toMatchObject({ kind: "refused" });
+    expect(seen).toHaveLength(0);
+  });
+
+  it("is set up from AI_FALLBACK with the backup's own key and model", () => {
+    process.env.AI_PROVIDER = "groq";
+    process.env.AI_API_KEY = "groq-key";
+    process.env.AI_MODEL = "groq-model";
+    process.env.AI_FALLBACK = "openrouter";
+    // Without its own key the backup isn't set up, and the main AI works alone.
+    expect(getAiProvider()).toMatchObject({ name: "groq", model: "groq-model" });
+    process.env.AI_FALLBACK_API_KEY = "or-key";
+    const both = getAiProvider();
+    expect(both).toBeInstanceOf(FallbackProvider);
+    expect(both).toMatchObject({ name: "groq (backup: openrouter)", model: "groq-model" });
+    // The main AI's model setting never leaks into the backup.
+    expect(compatibleProviderFromEnv("openrouter", "fallback")).toMatchObject({ model: "openrouter/free" });
+    process.env.AI_FALLBACK_MODEL = "some/free-model";
+    expect(compatibleProviderFromEnv("openrouter", "fallback")).toMatchObject({ model: "some/free-model" });
+    // If only the backup is set up, the chat still works with it.
+    delete process.env.AI_API_KEY;
+    expect(getAiProvider()).toMatchObject({ name: "openrouter", model: "some/free-model" });
   });
 });

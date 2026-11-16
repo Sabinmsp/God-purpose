@@ -96,6 +96,46 @@ export class AnthropicProvider implements AiProvider {
   }
 }
 
+/**
+ * Tries the main provider, and when it fails (busy, down, slow, misconfigured) asks the backup instead.
+ * A refusal is an answer, not an outage, so it is never retried elsewhere.
+ */
+export class FallbackProvider implements AiProvider {
+  constructor(
+    private primary: AiProvider,
+    private backup: AiProvider,
+  ) {}
+
+  get name() {
+    return `${this.primary.name} (backup: ${this.backup.name})`;
+  }
+
+  get model() {
+    return this.primary.model;
+  }
+
+  async reply(req: AiRequest): Promise<AiReply> {
+    let first: AiError;
+    try {
+      return await this.primary.reply(req);
+    } catch (err) {
+      if (!(err instanceof AiError) || err.kind === "refused") throw err;
+      first = err;
+    }
+    console.warn(`[ai] ${this.primary.name} failed (${first.kind}); trying ${this.backup.name}`);
+    try {
+      return await this.backup.reply(req);
+    } catch (err) {
+      if (!(err instanceof AiError)) throw err;
+      console.error(`[ai] backup ${this.backup.name} also failed (${err.kind}): ${err.message}`);
+      if (first.kind === "rate_limited" && err.kind === "rate_limited") {
+        throw new AiError("rate_limited", "Both free AIs are at their limit right now. Wait a minute and try again.");
+      }
+      throw new AiError(err.kind, `${first.message} The backup AI also failed: ${err.message}`);
+    }
+  }
+}
+
 let override: AiProvider | null | undefined;
 
 /** Tests inject a provider here; `undefined` restores the configured one. */
@@ -112,15 +152,27 @@ export function setAiProvider(provider: AiProvider | null | undefined) {
  *   AI_EFFORT          low | medium (default) | high | xhigh | max (anthropic only)
  *   AI_API_KEY         key for groq / openrouter / openai-compatible
  *   AI_BASE_URL        endpoint for openai-compatible, or to override a preset
+ *   AI_FALLBACK        optional backup provider, tried when the main one fails (e.g. openrouter)
+ *   AI_FALLBACK_API_KEY / AI_FALLBACK_MODEL / AI_FALLBACK_BASE_URL   the backup's own settings
  */
 export function getAiProvider(): AiProvider | null {
   if (override !== undefined) return override;
-  const provider = configuredProviderName();
-  if (provider !== "anthropic") return compatibleProviderFromEnv(provider);
+  const name = configuredProviderName();
+  const primary = providerFromEnv(name, "primary");
+  const backupName = (process.env.AI_FALLBACK ?? "").trim().toLowerCase();
+  const backup = backupName && backupName !== name ? providerFromEnv(backupName, "fallback") : null;
+  if (primary && backup) return new FallbackProvider(primary, backup);
+  // If only one of the two is set up, the chat still works with that one.
+  return primary ?? backup;
+}
+
+function providerFromEnv(name: string, role: "primary" | "fallback"): AiProvider | null {
+  if (name !== "anthropic") return compatibleProviderFromEnv(name, role);
   if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) return null;
   const effortEnv = (process.env.AI_EFFORT ?? "medium") as Effort;
   const effort = EFFORTS.includes(effortEnv) ? effortEnv : "medium";
-  return new AnthropicProvider(new Anthropic({ timeout: 90_000, maxRetries: 1 }), process.env.AI_MODEL || "claude-opus-5-5", effort);
+  const model = (role === "primary" ? process.env.AI_MODEL : process.env.AI_FALLBACK_MODEL) || "claude-opus-5-5";
+  return new AnthropicProvider(new Anthropic({ timeout: 90_000, maxRetries: 1 }), model, effort);
 }
 
 export function configuredProviderName() {

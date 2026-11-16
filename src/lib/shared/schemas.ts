@@ -11,7 +11,27 @@ const text = (max: number) => z.string().trim().max(max);
 /** Money arrives as integer cents; the client never sends balances. */
 const cents = z.number().int().positive().max(100_000_000_00);
 
+/** Login names: lowercase letters, numbers and underscores. Typed case is ignored. */
+export const usernameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9_]{3,24}$/, "Usernames are 3–24 letters, numbers or underscores.");
+
+export const MIN_NEW_PASSWORD = 8;
+
+export const signupSchema = z.object({
+  displayName: z.string().trim().min(1, "Enter a name.").max(24),
+  username: usernameSchema,
+  password: z.string().min(MIN_NEW_PASSWORD, `Use at least ${MIN_NEW_PASSWORD} characters.`).max(256),
+  /** Invite code, only when the server requires one. */
+  code: z.string().trim().max(100).optional(),
+});
+
+export const deleteAccountSchema = z.object({ password: z.string().min(1).max(256) });
+
 export const loginSchema = z.object({
+  username: usernameSchema,
   password: z.string().min(1).max(256),
   /** Authenticator code (6 digits) or a recovery code, once the password is accepted. */
   code: z.string().trim().min(1).max(20).optional(),
@@ -154,6 +174,7 @@ export const positionSchema = z.object({
 export const settingsSchema = z.object({
   displayName: text(24).min(1).optional(),
   muted: z.boolean().optional(),
+  music: z.boolean().optional(),
   reducedMotion: z.boolean().optional(),
   showSidePanel: z.boolean().optional(),
   textScale: z.number().min(0.85).max(1.4).optional(),

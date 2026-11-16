@@ -235,11 +235,13 @@ export interface GameState {
   welcome: WelcomeData | null;
   /** Push reminders: the server's public key and how many devices have them on. */
   reminders: { publicKey: string; devices: number };
-  security: { pinEnabled: boolean; weakPassword: boolean; twoFactorEnabled: boolean; recoveryCodesLeft: number };
+  security: { username: string; pinEnabled: boolean; weakPassword: boolean; twoFactorEnabled: boolean; recoveryCodesLeft: number };
 }
 
 export interface PlayerSettings {
   muted: boolean;
+  /** Background music loop (also silent while all sound is muted). */
+  music: boolean;
   reducedMotion: boolean;
   showSidePanel: boolean;
   textScale: number;
@@ -257,6 +259,7 @@ export interface PlayerSettings {
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
   muted: false,
+  music: true,
   reducedMotion: false,
   showSidePanel: true,
   textScale: 1,
