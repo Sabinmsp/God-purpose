@@ -161,9 +161,17 @@ A hovering robot stands by your front path. Walk up and press **E**, click/tap i
 - **Location (optional, off by default):** turning on *location awareness* reveals a one-off **Check my location** button (browser permission, no tracking). Coordinates stay in the browser tab; the AI receives an approximate position (±1 km) only on messages where you tick the box, and it is never stored.
 - **Maps later:** `src/lib/location/places.ts` defines the `PlacesProvider` interface for nearby gyms, libraries, universities and workplaces (MapLibre or a restricted Google Maps key behind a server route).
 
-## PixelLab art (optional)
+## Art
 
-All art is original and procedural, so the game is complete without external assets. `src/lib/server/assets/pixellab.ts` holds the server-only adapter and the character spec (Sabin, 32 px, 4 directions, all animations). With a working PixelLab key (`PIXELLAB_API_KEY`, server-only) you can generate matching sprite sheets and swap them in for the procedural ones.
+The village's natural ground and plants (grass, dirt roads, water, trees, bushes, rocks, bamboo) come from the
+[Ninja Adventure Asset Pack](https://pixel-boy.itch.io/ninja-adventure-asset-pack) by Pixel-boy and AAA (CC0), kept in
+`public/assets/ninja-adventure` and loaded by `src/game/art/pack.ts`. Everything else (the pillar buildings and their
+growth stages, the home, plaza, interiors, characters and effects) is original procedural art, which also stands in for
+the pack if its files are missing, so the game is complete without external assets.
+
+### PixelLab art (optional)
+
+The character can also use PixelLab sprites. `src/lib/server/assets/pixellab.ts` holds the server-only adapter and the character spec (Sabin, 32 px, 4 directions, all animations). With a working PixelLab key (`PIXELLAB_API_KEY`, server-only) you can generate matching sprite sheets and swap them in for the procedural ones.
 
 ## Data export
 

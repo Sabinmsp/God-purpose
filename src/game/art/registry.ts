@@ -2,23 +2,36 @@ import { PILLARS } from "@/lib/shared/pillars";
 import * as B from "./buildings";
 import { aiBot } from "./companion";
 import { DECORATIONS, buildingStage, victoryLantern } from "./evolution";
+import { packSprite } from "./pack";
 import type { Pixels } from "./paint";
 import * as P from "./props";
 
 /**
  * Every static world image by texture key. Phaser registers these at boot,
  * and the timeline's village snapshots draw the very same art without Phaser.
+ * Nature props come from the Ninja Adventure pack when it is loaded (./pack);
+ * the pillar buildings, decorations and village fixtures are procedural.
  */
+/** Dots ripe berries onto a pack bush (the pack has no green berry bush). */
+function berries(px: Pixels | null): Pixels | null {
+  if (!px) return null;
+  for (const [x, y] of [[4, 6], [10, 4], [8, 10], [12, 9]]) {
+    px.set(x, y, "#d24b4b");
+    px.set(x, y - 1, "#ff9a9a");
+  }
+  return px;
+}
+
 export const WORLD_ART: Record<string, () => Pixels> = {
   home: () => B.home(),
-  "tree-oak": () => P.tree("oak"),
-  "tree-pine": () => P.tree("pine"),
-  "tree-cherry": () => P.tree("cherry"),
+  "tree-oak": () => packSprite("nature", 6, 8, 2, 2) ?? P.tree("oak"),
+  "tree-pine": () => packSprite("nature", 2, 0, 2, 2) ?? P.tree("pine"),
+  "tree-cherry": () => packSprite("nature", 0, 18, 3, 3) ?? P.tree("cherry"),
   "tree-knowledge": () => P.tree("knowledge"),
-  "tree-autumn": () => P.tree("autumn"),
-  bush: () => P.bush(),
-  "bush-berry": () => P.bush(true),
-  rock: () => P.rock(),
+  "tree-autumn": () => packSprite("nature", 9, 18, 3, 3) ?? P.tree("autumn"),
+  bush: () => packSprite("nature", 2, 10) ?? P.bush(),
+  "bush-berry": () => berries(packSprite("nature", 1, 10)) ?? P.bush(true),
+  rock: () => packSprite("nature", 18, 9) ?? P.rock(),
   "stone-lantern": () => P.stoneLantern(),
   lamp: () => P.lampPost(),
   bench: () => P.bench(),
@@ -30,7 +43,7 @@ export const WORLD_ART: Record<string, () => Pixels> = {
   "stall-a": () => P.stall(["#d24b4b", "#f4efe4"]),
   "stall-b": () => P.stall(["#3e7cc9", "#f2c14e"]),
   gate: () => P.gate(),
-  bamboo: () => P.bamboo(),
+  bamboo: () => packSprite("nature", 11, 8, 1, 3) ?? P.bamboo(),
   "pot-red": () => P.flowerPot("#e05f5f"),
   "pot-yellow": () => P.flowerPot("#f2c14e"),
   mailbox: () => P.mailbox(),
