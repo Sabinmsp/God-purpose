@@ -20,7 +20,9 @@ export type InteractAction =
   | { type: "panel"; panel: PanelId }
   | { type: "scene"; scene: "home" | "village" }
   | { type: "npc"; npc: string }
-  | { type: "talk"; speaker: string; lines: string[] };
+  | { type: "talk"; speaker: string; lines: string[] }
+  | { type: "chest" }
+  | { type: "pet"; id: string };
 
 export interface Interactable {
   id: string;
@@ -30,6 +32,8 @@ export interface Interactable {
   label: string;
   verb: string;
   action: InteractAction;
+  /** How far above `y` the focus arrow floats (default 34). */
+  arrow?: number;
 }
 
 export interface Light {

@@ -169,7 +169,10 @@ A hovering robot stands by your front path. Walk up and press **E**, click/tap i
 
 The village's natural ground and plants (grass, dirt roads, water, trees, bushes, rocks, bamboo) come from the
 [Ninja Adventure Asset Pack](https://pixel-boy.itch.io/ninja-adventure-asset-pack) by Pixel-boy and AAA (CC0), kept in
-`public/assets/ninja-adventure` and loaded by `src/game/art/pack.ts`. Everything else (the pillar buildings and their
+`public/assets/ninja-adventure` and loaded by `src/game/art/pack.ts`. The same pack brings the village to life
+(`src/game/packSprites.ts`): a cat and a dog you can pet (the dog tags along for a while), hens and a frog that scatter,
+fish and ripples in the pond, emote bubbles, and the **daily chest** in the plaza, which opens only on a day you win all
+four pillars. None of it awards XP: progress still comes only from real wins. Everything else (the pillar buildings and their
 growth stages, the home, plaza, interiors, characters and effects) is original procedural art, which also stands in for
 the pack if its files are missing, so the game is complete without external assets.
 

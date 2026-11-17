@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { showEmote } from "../packSprites";
 import type { NpcSpawn } from "../world/village";
 import { Actor, facingFrom } from "./Actor";
 
@@ -6,6 +7,8 @@ import { Actor, facingFrom } from "./Actor";
 export class Npc extends Actor {
   private target?: { x: number; y: number };
   private wait = 1500 + Math.random() * 3000;
+  private wasNear = false;
+  private noticeCooldown = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -24,6 +27,13 @@ export class Npc extends Actor {
 
   update(dt: number, nearPlayer: boolean) {
     const body = this.sprite.body as Phaser.Physics.Arcade.Body;
+    // Notices the player walking up: a quick "!" shows there is something to say.
+    this.noticeCooldown -= dt;
+    if (nearPlayer && !this.wasNear && this.noticeCooldown <= 0) {
+      showEmote(this.scene, this.sprite, "alert", 36, 900);
+      this.noticeCooldown = 8000;
+    }
+    this.wasNear = nearPlayer;
     if (nearPlayer || this.spawn.wander === 0) {
       body.setVelocity(0, 0);
       if (!this.target) this.animateMove(false);
