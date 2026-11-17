@@ -9,11 +9,27 @@ import { T, TILE } from "../art/tiles";
 import { play } from "../audio";
 import { bridge } from "../bridge";
 import type { Facing } from "../objects/Actor";
+import { Critter, type CritterSpec } from "../objects/Critter";
 import { Npc } from "../objects/Npc";
-import { burst, floatText, pillarColor } from "../systems/effects";
+import { hasPackSprite, showEmote } from "../packSprites";
+import { burst, coinShower, floatText, pillarColor } from "../systems/effects";
+import { CHEST_SPOT, chestLines, chestOpened, chestStatus, markChestOpened } from "../world/chest";
 import { PILLAR_BUILDING, worldStages } from "../world/growth";
-import { SPOTS, buildVillage } from "../world/village";
+import { SPOTS, buildVillage, type InteractAction, type Interactable } from "../world/village";
 import { WorldScene } from "./WorldScene";
+
+/** Village animals (sprites from the asset pack). They live on open grass, away from doors. */
+const CRITTERS: CritterSpec[] = [
+  { id: "cat", tex: "na-cat", name: "Miso the cat", x: 704, y: 206, roam: 22, speed: 22, pet: true },
+  { id: "dog", tex: "na-dog", name: "Kuma the dog", x: 540, y: 410, roam: 48, speed: 30, pet: true, loyal: true },
+  { id: "hen-a", tex: "na-chicken-white", name: "Hen", x: 636, y: 628, roam: 30, speed: 16, skittish: true },
+  { id: "hen-b", tex: "na-chicken-brown", name: "Hen", x: 652, y: 648, roam: 30, speed: 16, skittish: true },
+  { id: "hen-c", tex: "na-chicken-black", name: "Hen", x: 620, y: 652, roam: 30, speed: 16, skittish: true },
+  { id: "frog", tex: "na-frog", name: "Frog", x: 152, y: 664, roam: 9, speed: 34, skittish: true, hops: true },
+];
+
+/** Open water of the pond, in world pixels (clear of the shore and the waterfall). */
+const POND = { x0: 62, x1: 136, y0: 630, y1: 682 };
 
 const LIGHT_TEX = { warm: "glow-warm", cool: "glow-cool", purple: "glow-purple", pink: "glow-pink" } as const;
 
@@ -91,11 +107,126 @@ export class VillageScene extends WorldScene {
 
     this.interactables = v.interact;
     for (const spawn of v.npcs) this.npcs.push(new Npc(this, spawn));
+    this.addVillageLife();
 
     this.ambient();
     // Lights are added after DayNight exists (see create override).
     this.pendingLights = v.lights;
     return { width: v.width, height: v.height };
+  }
+
+  private critters: Critter[] = [];
+  private chest?: Phaser.GameObjects.Sprite;
+  private chestReady = false;
+
+  /** Animals, pond life and the daily chest. Each piece is skipped if its sprite isn't installed. */
+  private addVillageLife() {
+    this.critters = [];
+    for (const spec of CRITTERS) {
+      if (!hasPackSprite(this, spec.tex)) continue;
+      const c = new Critter(this, spec);
+      this.physics.add.collider(c.sprite, this.solids);
+      this.critters.push(c);
+    }
+
+    // Fish glide under the surface of the pond.
+    ["na-fish-red", "na-fish-yellow", "na-fish-red"].forEach((tex, i) => {
+      if (!hasPackSprite(this, tex)) return;
+      const y = POND.y0 + 8 + i * 18;
+      const fish = this.add.sprite(i % 2 ? POND.x1 : POND.x0, y, tex, 0).setDepth(-6).setAlpha(0.75).setFlipX(i % 2 === 1);
+      this.tweens.add({
+        targets: fish,
+        x: i % 2 ? POND.x0 : POND.x1,
+        duration: 5200 + i * 1400,
+        ease: "Sine.easeInOut",
+        yoyo: true,
+        repeat: -1,
+        hold: 500,
+        repeatDelay: 500,
+        onYoyo: () => fish.toggleFlipX(),
+        onRepeat: () => fish.toggleFlipX(),
+      });
+      this.tweens.add({ targets: fish, y: y + 4, duration: 1700 + i * 300, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+    });
+    if (hasPackSprite(this, "na-ripple")) {
+      this.time.addEvent({
+        delay: 1500,
+        loop: true,
+        callback: () => {
+          const ripple = this.add.sprite(Phaser.Math.Between(POND.x0, POND.x1), Phaser.Math.Between(POND.y0, POND.y1), "na-ripple").setDepth(-7).setAlpha(0.8);
+          ripple.play("na-ripple").once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => ripple.destroy());
+        },
+      });
+    }
+
+    this.chest = undefined;
+    this.chestReady = false;
+    if (hasPackSprite(this, "na-chest")) {
+      this.chest = this.add.sprite(CHEST_SPOT.x, CHEST_SPOT.y, "na-chest", 0).setOrigin(0.5, 1).setDepth(CHEST_SPOT.y);
+      this.addSolid(CHEST_SPOT.x, CHEST_SPOT.y - 4, 14, 8);
+      this.interactables.push({ id: "chest", x: CHEST_SPOT.x, y: CHEST_SPOT.y + 4, r: 20, label: "Daily Chest", verb: "Open", action: { type: "chest" }, arrow: 26 });
+      // A chest that can be opened asks for attention.
+      this.time.addEvent({
+        delay: 2600,
+        loop: true,
+        callback: () => {
+          if (!this.chestReady || !this.chest) return;
+          showEmote(this, this.chest, "star", 18, 900);
+          this.tweens.add({ targets: this.chest, y: CHEST_SPOT.y - 2, duration: 110, yoyo: true, repeat: 1 });
+        },
+      });
+    }
+  }
+
+  /** The chest is shut until today's four pillars are won, and stays open once opened that day. */
+  private syncChest(state: GameState) {
+    if (!this.chest) return;
+    const c = chestStatus(state);
+    const opened = c.unlocked && chestOpened(state.player.name, c.date);
+    this.chest.setFrame(opened ? 1 : 0);
+    this.chestReady = c.unlocked && !opened;
+  }
+
+  private openChest() {
+    const state = bridge.state;
+    if (!state || !this.chest) return;
+    const c = chestStatus(state);
+    const opened = chestOpened(state.player.name, c.date);
+    if (c.unlocked && !opened) {
+      markChestOpened(state.player.name, c.date);
+      this.syncChest(state);
+      const reduced = state.player.settings.reducedMotion;
+      play("fanfare");
+      coinShower(this, CHEST_SPOT.x, CHEST_SPOT.y, reduced);
+      burst(this, CHEST_SPOT.x, CHEST_SPOT.y - 10, "fx-spark", [0xf2c14e, 0xfff1b0, 0xffffff], 22, reduced);
+      floatText(this, CHEST_SPOT.x, CHEST_SPOT.y - 30, "Four Wins chest opened!", 0xf2c14e);
+    } else {
+      play(c.unlocked ? "click" : "error");
+      if (!c.unlocked) this.tweens.add({ targets: this.chest, x: CHEST_SPOT.x + 1, duration: 45, yoyo: true, repeat: 3 });
+    }
+    bridge.emit("dialog", { speaker: "Daily Chest", lines: chestLines(c, opened) });
+  }
+
+  protected dynamicFocus(): Interactable | null {
+    for (const c of this.critters) {
+      if (!c.spec.pet || Phaser.Math.Distance.Between(this.player.x, this.player.y, c.x, c.y) > 24) continue;
+      return { id: `pet:${c.spec.id}`, x: c.x, y: c.y, r: 24, label: c.spec.name, verb: "Pet", action: { type: "pet", id: c.spec.id }, arrow: 26 };
+    }
+    return null;
+  }
+
+  protected runAction(action: InteractAction) {
+    if (action.type === "chest") return this.openChest();
+    if (action.type === "pet") {
+      if (this.critters.find((c) => c.spec.id === action.id)?.pet()) play("pet");
+      return;
+    }
+    super.runAction(action);
+  }
+
+  update(time: number, dt: number) {
+    super.update(time, dt);
+    for (const c of this.critters) c.update(dt, this.player);
   }
 
   private pendingLights: { x: number; y: number; size: number; color: keyof typeof LIGHT_TEX }[] = [];
@@ -282,6 +413,7 @@ export class VillageScene extends WorldScene {
 
   protected onState(state: GameState) {
     this.syncGrowth(state);
+    this.syncChest(state);
 
     const tuition = state.savings.goals.find((g) => g.key === "tuition");
     const car = state.savings.goals.find((g) => g.key === "car");

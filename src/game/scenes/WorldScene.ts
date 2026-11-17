@@ -40,6 +40,10 @@ export abstract class WorldScene extends Phaser.Scene {
   protected npcDialog(_npc: Npc, _state: GameState): Dialog | null {
     return null;
   }
+  /** Something that moves and can be interacted with (e.g. a pet); used only when nothing else is in reach. */
+  protected dynamicFocus(): Interactable | null {
+    return null;
+  }
 
   create() {
     this.npcs = [];
@@ -135,7 +139,10 @@ export abstract class WorldScene extends Phaser.Scene {
         nearest = { id: `npc:${npc.spawn.id}`, x: npc.x, y: npc.y, r: 26, label: npc.spawn.name, verb: "Talk", action: { type: "npc", npc: npc.spawn.id } };
       }
     }
-    if (nearest?.id !== this.focus?.id) {
+    nearest ??= this.dynamicFocus();
+    if (nearest?.id === this.focus?.id) {
+      this.focus = nearest; // same thing, but it may have moved
+    } else {
       this.focus = nearest;
       const f: Focus | null = nearest ? { id: nearest.id, label: nearest.label, verb: nearest.verb } : null;
       bridge.emit("focus", f);
@@ -156,7 +163,7 @@ export abstract class WorldScene extends Phaser.Scene {
       const n = this.npcs.find((x) => `npc:${x.spawn.id}` === this.focus!.id);
       return (n?.y ?? this.focus.y) - 38;
     }
-    return this.focus.y - 34;
+    return this.focus.y - (this.focus.arrow ?? 34);
   }
 
   interact() {

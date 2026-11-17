@@ -5,7 +5,7 @@
  * Everything runs through one master chain: a soft echo for sparkle, then a
  * compressor so stacked sounds never clip. Music has its own quiet bus.
  */
-type Sfx = "click" | "complete" | "xp" | "levelup" | "coin" | "unlock" | "error" | "door" | "open" | "fanfare" | "start" | "win" | "whoosh";
+type Sfx = "click" | "complete" | "xp" | "levelup" | "coin" | "unlock" | "error" | "door" | "open" | "fanfare" | "start" | "win" | "whoosh" | "pet";
 
 let ctx: AudioContext | null = null;
 let sfxBus: GainNode | null = null;
@@ -124,6 +124,10 @@ export function play(sfx: Sfx) {
       break;
     case "whoosh":
       noise(0, 0.28, 0.05, 400, 2400);
+      break;
+    case "pet":
+      note(784, 0, 0.07, "sine", 0.045);
+      note(1047, 0.07, 0.12, "sine", 0.04);
       break;
     case "door":
       note(196, 0, 0.08, "triangle", 0.06);

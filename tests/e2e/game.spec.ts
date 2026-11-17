@@ -258,10 +258,10 @@ test("keyboard movement, interaction and the home scene", async ({ page }) => {
 
 test("winning all four pillars grows the village, celebrates, and is recorded in the journey", async ({ page }) => {
   await login(page);
-  // Stand in the village (the previous test ended inside the home).
+  // Stand in the village, beside the daily chest (the previous test ended inside the home).
   await page.request.post("/api/player/position", {
     headers: { origin: new URL(page.url()).origin },
-    data: { scene: "village", x: 512, y: 300, facing: "down" },
+    data: { scene: "village", x: 472, y: 404, facing: "up" },
   });
   await page.reload();
   await expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
@@ -271,6 +271,14 @@ test("winning all four pillars grows the village, celebrates, and is recorded in
   expect(wonToday.size).toBeLessThan(4);
   await expect(canvas).toHaveAttribute("data-decorations", String(wonToday.size));
   await expect(canvas).toHaveAttribute("data-lanterns", "0");
+
+  // The daily chest stays locked until all four pillars are won today.
+  const chest = page.getByRole("dialog", { name: "Daily Chest" });
+  await expect(page.getByTestId("focus-prompt")).toContainText("Daily Chest", { timeout: 10_000 });
+  await page.keyboard.press("e");
+  await expect(chest).toContainText("Locked");
+  await page.keyboard.press("Escape");
+  await expect(chest).toBeHidden();
 
   await page.keyboard.press("q");
   const board = page.getByRole("dialog", { name: "The Daily Four Wins" });
@@ -294,6 +302,17 @@ test("winning all four pillars grows the village, celebrates, and is recorded in
   await expect(canvas).toHaveAttribute("data-lanterns", "1");
   const s1 = await state(page);
   expect(s1.campaign.progress).toMatchObject({ fourWinsDays: 1, tier: 1 });
+
+  // With four wins recorded, the chest opens (once a day); it celebrates but awards nothing.
+  await expect(page.getByTestId("focus-prompt")).toContainText("Daily Chest", { timeout: 10_000 });
+  await page.keyboard.press("e");
+  await expect(chest).toContainText("The chest swings open!");
+  await page.keyboard.press("Escape");
+  await expect(chest).toBeHidden();
+  await page.keyboard.press("e");
+  await expect(chest).toContainText("Already opened today.");
+  await page.keyboard.press("Escape");
+  expect((await state(page)).stats.overall.totalXp).toBe(s1.stats.overall.totalXp);
 
   // The journey timeline records the day and its visual upgrades.
   await page.getByTestId("hud-campaign").click();
