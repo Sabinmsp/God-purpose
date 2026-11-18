@@ -21,6 +21,7 @@ export type InteractAction =
   | { type: "scene"; scene: "home" | "village" }
   | { type: "npc"; npc: string }
   | { type: "talk"; speaker: string; lines: string[] }
+  | { type: "shelf" }
   | { type: "chest" }
   | { type: "pet"; id: string };
 
@@ -106,6 +107,9 @@ export function buildVillage() {
   fill(31, 16, 2, 18, pathTile);
   fill(26, 17, 12, 10, () => (r() < 0.5 ? T.STONE : T.STONE_ALT));
   fill(12, 16, 2, 1, pathTile);
+  // A two-tile brook crosses the east road. Only the bridge is walkable.
+  fill(40, 10, 2, 10, T.WATER_A, true);
+  fill(40, 14, 2, 2, T.BRIDGE, true);
   // Pond with shore + waterfall corner (south-west)
   for (let y = 37; y < 43; y++) for (let x = 2; x < 9; x++) ground[y][x] = y === 37 ? T.SHORE_A : T.WATER_A;
   reserve(2, 37, 7, 6);
@@ -165,6 +169,9 @@ export function buildVillage() {
   lights.push({ x: 208, y: 190, size: 90, color: "purple" }, { x: 104, y: 226, size: 50, color: "purple" }, { x: 312, y: 226, size: 50, color: "purple" });
 
   // Strength Arena district
+  for (const x of [592, 688, 766]) add({ key: "banner-red", x, y: 222 });
+  for (const [x, y] of [[638, 213], [675, 268], [642, 286]]) add({ key: "reeds", x, y });
+  add({ key: "empty-shelf", x: 258, y: 232, collide: { w: 26, h: 6 } });
   add({ key: "dumbbell-rack", x: 728, y: 296, collide: { w: 32, h: 8 } });
   add({ key: "barbell", x: 784, y: 320, collide: { w: 26, h: 6 } });
   add({ key: "dummy", x: 880, y: 300, collide: { w: 10, h: 6 } });
@@ -230,6 +237,7 @@ export function buildVillage() {
   // Interactables
   interact.push(
     { id: "home", ...SPOTS.home, y: SPOTS.home.y + 10, r: 22, label: "Your Home", verb: "Enter", action: { type: "scene", scene: "home" } },
+    { id: "shelf", x: 258, y: 237, r: 18, label: "Learning shelf", verb: "Read", action: { type: "shelf" } },
     { id: "temple", ...SPOTS.temple, y: SPOTS.temple.y + 10, r: 26, label: "Mind Temple", verb: "Enter", action: { type: "panel", panel: "mental" } },
     { id: "arena", ...SPOTS.arena, y: SPOTS.arena.y + 10, r: 26, label: "Strength Arena", verb: "Enter", action: { type: "panel", panel: "physical" } },
     { id: "sanctuary", ...SPOTS.sanctuary, y: SPOTS.sanctuary.y + 10, r: 26, label: "Spirit Sanctuary", verb: "Enter", action: { type: "panel", panel: "spiritual" } },
@@ -265,7 +273,7 @@ export function buildVillage() {
   const npcs: NpcSpawn[] = [
     { id: "guide", look: "guide", name: "The Guide", x: 568, y: 352, wander: 0 },
     { id: "librarian", look: "librarian", name: "Librarian Iris", x: 268, y: 280, wander: 40, activity: "read" },
-    { id: "coach", look: "coach", name: "Coach Rafa", x: 816, y: 288, wander: 30, activity: "exercise" },
+    { id: "coach", look: "coach", name: "Coach Rafa", x: 786, y: 246, wander: 0 },
     { id: "keeper", look: "keeper", name: "Keeper Hana", x: 288, y: 596, wander: 30, activity: "meditate" },
     { id: "banker", look: "banker", name: "Banker Otto", x: 752, y: 580, wander: 30 },
   ];
@@ -275,6 +283,8 @@ export function buildVillage() {
   const colliders = [
     ...props.filter((p) => p.collide).map((p) => ({ x: p.x, y: p.y - (p.collide!.oy ?? 0) - p.collide!.h / 2, w: p.collide!.w, h: p.collide!.h })),
     ...buildings.map((b) => ({ x: b.x, y: b.y - 6 - b.h / 2, w: b.w, h: b.h })),
+    { x: 656, y: 192, w: 32, h: 64 },
+    { x: 656, y: 288, w: 32, h: 64 },
     // pond water
     { x: 5.5 * TILE, y: 40.5 * TILE, w: 7 * TILE, h: 5 * TILE },
   ];

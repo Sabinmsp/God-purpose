@@ -56,7 +56,7 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
   await ensureBoard(q, ctx.playerId, date);
   const campaign = await getCampaign(q, ctx.playerId);
 
-  const [player, xp, quests, library, savings, finance, body, goals, journal, week, days, unlockRows, achievementRows, xpTodayRows, creds, cDays, doneRows, wellbeing, devices] =
+  const [player, xp, quests, library, savings, finance, body, goals, journal, week, days, unlockRows, achievementRows, xpTodayRows, creds, cDays, doneRows, wellbeing, devices, learningEntries] =
     await Promise.all([
       getPlayer(q, ctx.playerId),
       pillarXp(q, ctx.playerId),
@@ -86,6 +86,7 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
       `,
       wellbeingSummary(q, ctx.playerId, date),
       q<{ n: number }[]>`select count(*)::int as n from push_subscriptions where player_id = ${ctx.playerId}`.then((r) => r[0].n),
+      q<{ n: number }[]>`select count(*)::int as n from journal_entries where player_id = ${ctx.playerId} and kind = 'learning'`.then((r) => r[0].n),
     ]);
 
   const levels = levelsOf(xp);
@@ -113,6 +114,7 @@ export async function buildState(ctx: Ctx, opts: { welcome?: boolean } = {}): Pr
       missionsDone: Object.fromEntries(PILLARS.map((p) => [p, doneRows.find((r) => r.pillar === p)?.n ?? 0])) as Record<Pillar, number>,
     },
     wellbeing,
+    learningEntries,
     today: {
       quests,
       xpToday: Object.fromEntries(PILLARS.map((p) => [p, Math.max(0, xpTodayRows.find((r) => r.pillar === p)?.xp ?? 0)])) as Record<Pillar, number>,

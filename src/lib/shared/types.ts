@@ -201,6 +201,8 @@ export interface GameState {
     /** All-time completed missions per pillar (the INT/STR/WIS/WEA attributes). */
     missionsDone: Record<Pillar, number>;
   };
+  /** Lifetime learning entries on the Mind Temple shelf. */
+  learningEntries: number;
   /** Self-reported Brain & Wellbeing check-ins. */
   wellbeing: { today: WellbeingView | null; recent: WellbeingView[] };
   today: {

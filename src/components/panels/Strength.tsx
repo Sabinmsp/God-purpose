@@ -173,10 +173,10 @@ function MeasurementForm() {
   );
 }
 
-export function StrengthPanel({ onClose }: { onClose: () => void }) {
+export function StrengthPanel({ onClose, fromTrainer = false }: { onClose: () => void; fromTrainer?: boolean }) {
   const s = useGameState();
   const { act } = useGame();
-  const [tab, setTab] = useState<"today" | "log" | "body" | "history" | "goals">("today");
+  const [tab, setTab] = useState<"today" | "log" | "body" | "history" | "goals">(fromTrainer ? "log" : "today");
   const b = s.body;
   const trainingGoal = s.goals.find((g) => g.linkedSource === "workouts:week");
 
@@ -219,7 +219,7 @@ export function StrengthPanel({ onClose }: { onClose: () => void }) {
       {tab === "log" && (
         <Section title="Log a real workout">
           <p className="mb-3 text-sm text-cream-dim">Logging completes today&apos;s workout quest. Beating a previous best weight sets a personal record.</p>
-          <WorkoutForm onSaved={() => setTab("history")} />
+          <WorkoutForm onSaved={fromTrainer ? onClose : () => setTab("history")} />
         </Section>
       )}
       {tab === "body" && (

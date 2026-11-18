@@ -193,6 +193,7 @@ export abstract class WorldScene extends Phaser.Scene {
       case "npc": {
         const npc = this.npcs.find((n) => n.spawn.id === action.npc);
         if (!npc || !state) return;
+        this.player.savePosition();
         npc.faceToward(this.player.x, this.player.y);
         const dialog = this.npcDialog(npc, state) ?? defaultNpcDialog(npc.spawn.id, npc.spawn.name, state);
         play("click");
@@ -294,15 +295,13 @@ export function defaultNpcDialog(id: string, name: string, s: GameState): Dialog
         action: { label: "Enter Mind Temple", panel: "mental" },
       };
     case "coach": {
-      const b = s.body;
-      const lines = [
-        b.workoutsTotal
-          ? `This week: ${b.workoutsThisWeek} workout${b.workoutsThisWeek === 1 ? "" : "s"} logged. ${b.workoutsTotal} all-time.`
-          : "No workouts logged yet. Log your first session inside the Arena!",
-      ];
-      if (s.today.rest.physical || s.today.rest.all) lines.push("Rest day today — recovery builds strength too.");
-      else lines.push(nextLine("physical"));
-      return { speaker: name, lines, action: { label: "Enter Strength Arena", panel: "physical" } };
+      const workout = s.body.workouts.find((w) => w.date === s.now.date);
+      const line = workout
+        ? `That pennant is yours today, ${s.player.name}. I logged your ${workout.durationMin} minutes of ${workout.title}.`
+        : s.today.rest.physical || s.today.rest.all
+          ? "A recovery day! The arena will be here when you are ready."
+          : "See the bare pole by the gate? Tell me about a workout you did today and we’ll raise your pennant.";
+      return { speaker: name, lines: [line], action: { label: "Log a workout", panel: "workout" } };
     }
     case "keeper":
       return {

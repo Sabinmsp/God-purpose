@@ -1,6 +1,8 @@
 import type { GameEvent, GameState } from "@/lib/shared/types";
 
 export type PanelId =
+  | "journal"
+  | "workout"
   | "quests"
   | "mental"
   | "physical"

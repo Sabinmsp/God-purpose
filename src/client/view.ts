@@ -3,8 +3,8 @@
 import { useSyncExternalStore } from "react";
 
 /**
- * Which screen the app shows: the calm "today" view (default on phones) or the
- * pixel world (default on larger screens). The choice is a per-device
+ * Which screen the app shows: the calm "today" view or the
+ * pixel world (default). The choice is a per-device
  * convenience kept in localStorage; it holds no game data.
  */
 export type View = "today" | "world";
@@ -22,7 +22,7 @@ function initial(): View {
   } catch {
     /* storage blocked */
   }
-  return window.matchMedia("(max-width: 767px)").matches ? "today" : "world";
+  return "world";
 }
 
 export function getView(): View {

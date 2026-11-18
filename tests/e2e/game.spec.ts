@@ -4,15 +4,14 @@ import { E2E_PASSWORD } from "../../playwright.config";
 
 const worldReady = (page: Page) => expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
 
-/** Phones open on the calm Today view; larger screens open in the world. */
-async function login(page: Page, opens: "world" | "today" = "world") {
+/** Fresh devices start in the village. */
+async function login(page: Page) {
   await page.goto("/login");
   await page.getByLabel("Username").fill("sabin");
   await page.getByLabel("Password", { exact: true }).fill(E2E_PASSWORD);
   await page.getByRole("button", { name: /Enter the world/ }).click();
   await page.waitForURL("/");
-  if (opens === "world") await worldReady(page);
-  else await expect(page.getByTestId("today-app")).toBeVisible({ timeout: 30_000 });
+  await worldReady(page);
   // The game opens on either the welcome-back screen or the daily title screen (never both).
   const welcome = page.getByTestId("welcome");
   const title = page.getByTestId("title-screen");
@@ -21,6 +20,10 @@ async function login(page: Page, opens: "world" | "today" = "world") {
   if (await title.isVisible().catch(() => false)) await title.getByRole("button", { name: /Continue/ }).click();
   await expect(welcome).toBeHidden();
   await expect(title).toBeHidden();
+}
+
+async function openJournal(page: Page) {
+  await page.getByRole("button", { name: "Journal", exact: true }).click();
 }
 
 async function state(page: Page) {
@@ -125,6 +128,7 @@ test("first visit: welcome screen, real progress, and persistence", async ({ pag
   await page.keyboard.press("Escape");
 
   // Save toward tuition in the Wealth Kingdom.
+  await openJournal(page);
   await page.getByRole("button", { name: /Financial level/ }).click();
   const wealth = page.getByRole("dialog", { name: "Wealth Kingdom" });
   const tuition = wealth.getByTestId("vault-tuition");
@@ -172,7 +176,9 @@ test("first visit: welcome screen, real progress, and persistence", async ({ pag
 test("another device sees the same character, goals, balances and unlocks", async ({ browser }) => {
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   const page = await phone.newPage();
-  await login(page, "today");
+  await login(page);
+  await openJournal(page);
+  await page.getByRole("button", { name: "Today view" }).click();
   const s = await state(page);
 
   // Today view: the wins ring matches the server, one next step, no horizontal scroll.
@@ -315,6 +321,7 @@ test("winning all four pillars grows the village, celebrates, and is recorded in
   expect((await state(page)).stats.overall.totalXp).toBe(s1.stats.overall.totalXp);
 
   // The journey timeline records the day and its visual upgrades.
+  await openJournal(page);
   await page.getByTestId("hud-campaign").click();
   const journey = page.getByRole("dialog", { name: "75-Day Journey" });
   await expect(journey.getByTestId("journey-day-number")).toHaveText("Day 1 of 75");
@@ -397,6 +404,7 @@ test("Four Wins AI: talk to the NPC, chat, approve a mission, manage memory, che
   await page.unroute("**/api/ai/chat");
   await page.reload();
   await expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
+  await openJournal(page);
   await page.getByRole("button", { name: "Four Wins AI", exact: true }).click();
   await panel.getByRole("tab", { name: /Memory/ }).click();
   await expect(panel.getByTestId("ai-memory-list")).toContainText("I prefer workouts before 8am");
@@ -415,9 +423,10 @@ test("Four Wins AI: talk to the NPC, chat, approve a mission, manage memory, che
   await expect(panel.getByTestId("location-check")).toHaveCount(0);
 });
 
-test("one-page HUD: attributes, hotbar and a wellbeing check-in that persists", async ({ page }) => {
+test("journal: attributes, hotbar and a wellbeing check-in that persists", async ({ page }) => {
   await login(page);
   const s = await state(page);
+  await openJournal(page);
   const bar = page.getByTestId("character-bar");
   await expect(bar).toBeVisible();
   await expect(bar.getByRole("button", { name: `Intelligence ${s.stats.missionsDone.mental}`, exact: true })).toBeVisible();
@@ -430,6 +439,7 @@ test("one-page HUD: attributes, hotbar and a wellbeing check-in that persists", 
   await expect(chat.getByTestId("ai-brief")).toContainText(`Day ${s.campaign.dayNumber} of your 75-day journey`);
   await chat.getByRole("button", { name: "Close", exact: true }).click();
 
+  await openJournal(page);
   const card = page.getByTestId("wellbeing");
   await expect(card.getByTestId("wellbeing-sleepMinutes")).toHaveText("—");
   await card.getByRole("button", { name: /Check in/ }).click();
@@ -443,6 +453,7 @@ test("one-page HUD: attributes, hotbar and a wellbeing check-in that persists", 
 
   await page.reload();
   await expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
+  await openJournal(page);
   await expect(page.getByTestId("wellbeing").getByTestId("wellbeing-sleepMinutes")).toHaveText("7.5h");
   const after = await state(page);
   expect(after.stats.overall.totalXp).toBe(s.stats.overall.totalXp);
@@ -450,8 +461,66 @@ test("one-page HUD: attributes, hotbar and a wellbeing check-in that persists", 
 
 test("logout ends the session on the server", async ({ page }) => {
   await login(page);
+  await openJournal(page);
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Log out" }).click();
   await page.waitForURL(/\/login$/);
   expect((await page.request.get("/api/state")).status()).toBe(401);
 });
+
+for (const mobile of [false, true]) {
+  test(`home to Rafa, a saved workout and the return visit on ${mobile ? "mobile" : "desktop"}`, async ({ browser, baseURL }) => {
+    const context = await browser.newContext({
+      baseURL,
+      viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 },
+      isMobile: mobile,
+      hasTouch: mobile,
+    });
+    try {
+      const page = await context.newPage();
+      const created = await page.request.post("/api/auth/signup", {
+        headers: { origin: baseURL! },
+        data: { displayName: "Walker", username: mobile ? "mobile_walker" : "desktop_walker", password: E2E_PASSWORD },
+      });
+      expect(created.ok()).toBe(true);
+      await page.goto("/");
+      await worldReady(page);
+      await page.getByTestId("welcome").getByRole("button").click();
+      await expect(page.getByText("Meet Coach Rafa")).toBeVisible();
+      const prompt = page.getByTestId("focus-prompt");
+      const trainer = page.getByRole("dialog", { name: "Coach Rafa" });
+      if (mobile) {
+        const knob = (await page.getByTestId("joystick").boundingBox())!;
+        const y = knob.y + knob.height / 2;
+        await page.mouse.move(knob.x + knob.width / 2, y);
+        await page.mouse.down();
+        await page.mouse.move(knob.x + knob.width - 2, y, { steps: 3 });
+      } else {
+        await page.getByTestId("game-canvas").focus();
+        await page.keyboard.down("ArrowRight");
+      }
+      try {
+        await expect(prompt).toContainText("Coach Rafa", { timeout: 35000 });
+      } finally {
+        if (mobile) await page.mouse.up();
+        else await page.keyboard.up("ArrowRight");
+      }
+      await prompt.click();
+      await trainer.getByRole("button", { name: "Log a workout" }).click();
+      await page.getByLabel("Session", { exact: true }).fill("Evening walk");
+      await page.getByLabel("Duration (minutes)").fill("25");
+      await page.getByRole("button", { name: "Log workout", exact: true }).click();
+      await expect(page.getByRole("dialog", { name: "Strength Arena" })).toBeHidden();
+      await expect(page.getByText("Meet Coach Rafa")).toBeHidden();
+      await prompt.click();
+      await expect(trainer).toContainText("25 minutes of Evening walk");
+      await page.reload();
+      await worldReady(page);
+      await prompt.click();
+      await expect(trainer).toContainText("That pennant is yours today");
+      expect((await state(page)).body.workoutsTotal).toBe(1);
+    } finally {
+      await context.close();
+    }
+  });
+}

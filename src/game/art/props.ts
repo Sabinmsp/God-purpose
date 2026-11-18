@@ -323,6 +323,16 @@ export function moneyBag(): Pixels {
   return p;
 }
 
+export function reeds(): Pixels {
+  const p = new Pixels(12, 14);
+  for (const [x, y] of [[2, 5], [5, 2], [8, 4]]) {
+    p.vline(x, y, 13 - y, "#697a42");
+    p.rect(x - 1, y - 1, 2, 3, "#9a613b");
+  }
+  p.hline(1, 13, 9, "#446647");
+  return p;
+}
+
 export function banner(color: string): Pixels {
   const p = new Pixels(10, 30);
   p.rect(4, 0, 2, 30, "#5a3a24");

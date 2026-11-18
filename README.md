@@ -12,11 +12,8 @@ Nothing is earned by opening the game. XP, levels, unlocks and vault balances co
 - **Real records → automatic quest wins** — logging a workout, a personal record, a measurement, an expense, a vault deposit, gratitude notes, a reflection or a learning note completes the matching quest once per day.
 - **Wealth Kingdom** — Tuition Vault (A$13,000, coin pile fills) and Car Vault (A$10,000, car builds at 10/25/50/75/100%), deposits, withdrawals, reconcile-to-bank-balance, income/expense/transfer tracking.
 - **Strength Arena** — workout journal with sets, PR detection, weigh-ins, weight trend, physique tier.
-- **One-page HUD** — on a laptop or desktop everything sits around the world at once:
-  - **Top:** player and pillar cards (top-left); date, campaign day and streak (top-right).
-  - **Right column:** the Daily Four, **Brain & Wellbeing**, and an item hotbar of what you've unlocked.
-  - **Bottom:** a character bar with INT/STR/WIS/WEA (all-time missions completed per pillar), and an optional location card.
-  - **Brain & Wellbeing** is a private daily check-in (sleep, energy, mood, focus, distraction minutes). It never awards XP. The AI companion sees it as self-reported data.
+- **Village HUD** — your portrait and one tracked quest sit over the map. Open **Log a win** for the daily board or **Journal** for pillar stats, wellbeing, inventory, reminders and the Today view.
+- **The east road** starts outside your home. Follow the red banners across the brook to Coach Rafa and log a real workout to raise the arena pennant for the Darwin day. Learning notes fill the Mind Temple bookshelf, a daily reflection lights a sanctuary lantern, and savings milestones build the car in the garage.
 - **Reminders that come to you** — phone notifications at about 7:30am, 12:30pm and 7:30pm (Darwin), each naming one small step with a **Done** button, so a win takes one tap from the lock screen and the game never has to be opened. See [Reminders](#reminders).
 - **Goals & calendar**, **trophy room**, **home that upgrades** with furniture as you level, **day/night on Australia/Darwin time**, **welcome-back screen** showing what changed since your last visit, and **The Guide**, which answers five questions using only your stored records (no AI subscription needed).
 

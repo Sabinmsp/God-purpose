@@ -18,12 +18,11 @@ import { MindPanel, SanctuaryPanel } from "./panels/MindSpirit";
 import { QuestBoardPanel } from "./panels/QuestBoard";
 import { StrengthPanel } from "./panels/Strength";
 import { WealthPanel } from "./panels/Wealth";
-import { Hotbar, Hud } from "./Hud";
+import { Hud, Journal } from "./Hud";
 import { ReminderCard } from "./Reminders";
 import { FloatingXp, LevelUpMoment, TitleScreen, WorldMusic, markTitleSeen } from "./Juice";
 import { TodayApp } from "./Today";
 import { QuestRow } from "./quests";
-import { WellbeingCard } from "./panels/Wellbeing";
 import { Bar, Portrait } from "./ui";
 
 export default function GameApp() {
@@ -36,7 +35,6 @@ export default function GameApp() {
 
 function Shell() {
   const { state, loading, locked } = useGame();
-  const sidePanel = state?.player.settings.showSidePanel ?? true;
   useEffect(() => {
     if (!state) return;
     document.documentElement.style.setProperty("--text-scale", String(state.player.settings.textScale));
@@ -62,13 +60,11 @@ function Shell() {
               <FocusPrompt />
               <TouchControls />
               <AiHost />
-              <ReminderCard floating />
             </>
           )}
           {(loading || !state || !view) && !locked && <Loading />}
         </div>
       )}
-      {state && world && sidePanel && <SidePanel />}
       {state && <PanelHost />}
       {state && <DialogBox />}
       {state?.welcome && <WelcomeBack />}
@@ -146,16 +142,6 @@ function GameCanvas() {
   );
 }
 
-function SidePanel() {
-  return (
-    <aside className="hidden w-[340px] shrink-0 flex-col gap-3 border-l-4 border-[#04061a] bg-navy-950 p-3 lg:flex" aria-label="Today">
-      <DailyFour />
-      <WellbeingCard />
-      <Hotbar />
-    </aside>
-  );
-}
-
 function DailyFour() {
   const s = useGameState();
   const { openPanel } = useGame();
@@ -204,7 +190,15 @@ function DailyFour() {
 function PanelHost() {
   const { panel, openPanel } = useGame();
   const close = () => openPanel(null);
+  const state = useGameState();
   switch (panel) {
+    case "journal":
+      return <Journal onClose={close}>
+        {state.player.settings.showSidePanel && <DailyFour />}
+        <ReminderCard />
+      </Journal>;
+    case "workout":
+      return <StrengthPanel fromTrainer onClose={close} />;
     case "quests":
       return <QuestBoardPanel onClose={close} />;
     case "mental":
@@ -251,6 +245,7 @@ function DialogContent({ dialog }: { dialog: NonNullable<ReturnType<typeof useGa
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setDialog(null);
+      if ((e.key === "Enter" || e.key === " ") && (e.target as HTMLElement)?.closest("button")) return;
       if (e.key === "e" || e.key === "E" || e.key === "Enter" || e.key === " ") {
         e.preventDefault();
         if (i < dialog.lines.length - 1) setI(i + 1);
@@ -268,11 +263,11 @@ function DialogContent({ dialog }: { dialog: NonNullable<ReturnType<typeof useGa
         <p className="min-h-12 text-lg leading-snug">{dialog.lines[i]}</p>
         <div className="mt-3 flex items-center justify-end gap-2">
           {dialog.action && (
-            <button className="px-btn" onClick={() => openPanel(dialog.action!.panel)}>
+            <button className="px-btn" autoFocus onClick={() => openPanel(dialog.action!.panel)}>
               {dialog.action.label}
             </button>
           )}
-          <button className="px-btn secondary" onClick={() => (last ? setDialog(null) : setI(i + 1))} autoFocus>
+          <button className="px-btn secondary" onClick={() => (last ? setDialog(null) : setI(i + 1))} autoFocus={!dialog.action}>
             {last ? "Close" : "Next ▸"}
           </button>
         </div>
@@ -404,7 +399,7 @@ function WelcomeBack() {
   if (w.firstVisit) {
     lines.push({ text: `Level ${s.stats.overall.level} ${s.player.characterClass}. Your world starts here.` });
     lines.push({ text: "Nothing is earned just by logging in — every win comes from real life." });
-    lines.push({ text: "Visit the Quest Board in the plaza, or press Q." });
+    lines.push({ text: "Follow the red banners east from home. Coach Rafa is waiting across the bridge." });
   } else {
     for (const lu of w.levelUps)
       lines.push({

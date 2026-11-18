@@ -2,6 +2,7 @@ import { PILLARS } from "@/lib/shared/pillars";
 import * as B from "./buildings";
 import { aiBot } from "./companion";
 import { DECORATIONS, buildingStage, victoryLantern } from "./evolution";
+import { bookshelf } from "./furniture";
 import { packSprite } from "./pack";
 import type { Pixels } from "./paint";
 import * as P from "./props";
@@ -48,6 +49,8 @@ export const WORLD_ART: Record<string, () => Pixels> = {
   "pot-yellow": () => P.flowerPot("#f2c14e"),
   mailbox: () => P.mailbox(),
   books: () => P.bookStack(),
+  "empty-shelf": () => bookshelf(0),
+  reeds: () => P.reeds(),
   tablet: () => P.tablet(),
   lily: () => P.lilyPad(),
   fence: () => P.fence(),
