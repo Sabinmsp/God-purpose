@@ -2,42 +2,18 @@
 
 import { useSyncExternalStore } from "react";
 
-/**
- * Which screen the app shows: the calm "today" view or the
- * pixel world (default). The choice is a per-device
- * convenience kept in localStorage; it holds no game data.
- */
-export type View = "today" | "world";
+export type View = "today" | "progress" | "world";
 
-const KEY = "fw:view";
 const listeners = new Set<() => void>();
-let current: View | null = null;
-
-function initial(): View {
-  // A tapped reminder (and the home-screen icon) always lands on the today view.
-  if (new URLSearchParams(window.location.search).get("view") === "today") return "today";
-  try {
-    const saved = localStorage.getItem(KEY);
-    if (saved === "today" || saved === "world") return saved;
-  } catch {
-    /* storage blocked */
-  }
-  return "world";
-}
+let current: View = "today";
 
 export function getView(): View {
-  if (current === null) current = initial();
   return current;
 }
 
-export function setView(v: View) {
-  current = v;
-  try {
-    localStorage.setItem(KEY, v);
-  } catch {
-    /* storage blocked */
-  }
-  listeners.forEach((l) => l());
+export function setView(view: View) {
+  current = view;
+  listeners.forEach((listener) => listener());
 }
 
 function subscribe(l: () => void) {

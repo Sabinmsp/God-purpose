@@ -4,26 +4,22 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "@/client/api";
 import { GameProvider, useGame, useGameState } from "@/client/store";
 import { useView } from "@/client/view";
-import { play, startMusic } from "@/game/audio";
 import { bridge, touchInput, type Focus } from "@/game/bridge";
-import { ACHIEVEMENTS_BY_KEY } from "@/lib/shared/achievements";
-import { EVOLUTION, STAGE_NAMES } from "@/lib/shared/campaign";
-import { formatAud } from "@/lib/shared/money";
 import { PILLARS, PILLAR_META } from "@/lib/shared/pillars";
-import { UNLOCKS_BY_KEY } from "@/lib/shared/unlocks";
 import { AiPanel } from "./panels/Ai";
 import { JourneyPanel } from "./panels/Journey";
 import { AchievementsPanel, GoalsPanel, GuidePanel, ProfilePanel, SettingsPanel } from "./panels/Meta";
+import { HabitLogPanel, isHabitLogKey } from "./panels/HabitLog";
 import { MindPanel, SanctuaryPanel } from "./panels/MindSpirit";
-import { QuestBoardPanel } from "./panels/QuestBoard";
+import { ManageHabitsPanel, QuestBoardPanel } from "./panels/QuestBoard";
 import { StrengthPanel } from "./panels/Strength";
 import { WealthPanel } from "./panels/Wealth";
 import { Hud, Journal } from "./Hud";
 import { ReminderCard } from "./Reminders";
-import { FloatingXp, LevelUpMoment, TitleScreen, WorldMusic, markTitleSeen } from "./Juice";
-import { TodayApp } from "./Today";
+import { FloatingXp, LevelUpMoment, WorldMusic } from "./Juice";
+import { MainNavigation, TodayApp } from "./Today";
 import { QuestRow } from "./quests";
-import { Bar, Portrait } from "./ui";
+import { Bar } from "./ui";
 
 export default function GameApp() {
   return (
@@ -34,12 +30,16 @@ export default function GameApp() {
 }
 
 function Shell() {
-  const { state, loading, locked } = useGame();
+  const { state, loading, locked, dismissWelcome } = useGame();
   useEffect(() => {
     if (!state) return;
     document.documentElement.style.setProperty("--text-scale", String(state.player.settings.textScale));
     document.documentElement.classList.toggle("reduced-motion", state.player.settings.reducedMotion);
   }, [state]);
+
+  useEffect(() => {
+    if (state?.welcome && !locked) dismissWelcome();
+  }, [state?.welcome, locked, dismissWelcome]);
 
   const view = useView();
   // The world (and its Phaser canvas) only mounts when it is on screen, so the
@@ -47,12 +47,12 @@ function Shell() {
   const world = view === "world";
 
   return (
-    <main className="fixed inset-0 flex overflow-hidden bg-navy-950">
-      {state && view === "today" ? (
-        <TodayApp />
+    <main className="fixed inset-0 flex flex-col overflow-hidden bg-navy-950">
+      {state && view && !world ? (
+        <TodayApp view={view} />
       ) : (
         // Fade only: a transform here would re-anchor the world's fixed pop-ups to this box.
-        <div className={`relative min-w-0 flex-1 ${world ? "anim-fade" : ""}`}>
+        <div className={`relative min-h-0 min-w-0 flex-1 ${world ? "anim-fade" : ""}`}>
           {world && <GameCanvas />}
           {state && world && (
             <>
@@ -65,11 +65,11 @@ function Shell() {
           {(loading || !state || !view) && !locked && <Loading />}
         </div>
       )}
+      {state && view && <MainNavigation view={view} />}
+      {state && view && !world && <AiHost />}
       {state && <PanelHost />}
       {state && <DialogBox />}
-      {state?.welcome && <WelcomeBack />}
-      {state && !locked && <TitleScreen />}
-      <Celebration />
+      {world && <Celebration />}
       <LevelUpMoment />
       <FloatingXp />
       <WorldMusic />
@@ -105,7 +105,7 @@ function GameCanvas() {
       el.setAttribute("data-ready", "true");
       // Give the world keyboard focus so WASD works without a click first.
       const active = document.activeElement;
-      if (!active || active === document.body) el.focus({ preventScroll: true });
+      if (!active || active === document.body || active.closest(".habit-nav")) el.focus({ preventScroll: true });
     });
     // Mirrors what has grown in the world (read by e2e tests; harmless otherwise).
     const offWorld = bridge.on("world", (w) => {
@@ -191,6 +191,8 @@ function PanelHost() {
   const { panel, openPanel } = useGame();
   const close = () => openPanel(null);
   const state = useGameState();
+  const log = panel?.startsWith("log:") ? panel.slice(4) : null;
+  if (isHabitLogKey(log)) return <HabitLogPanel key={log} kind={log} onClose={close} />;
   switch (panel) {
     case "journal":
       return <Journal onClose={close}>
@@ -199,6 +201,8 @@ function PanelHost() {
       </Journal>;
     case "workout":
       return <StrengthPanel fromTrainer onClose={close} />;
+    case "manage-habits":
+      return <ManageHabitsPanel onClose={close} />;
     case "quests":
       return <QuestBoardPanel onClose={close} />;
     case "mental":
@@ -386,79 +390,6 @@ function Toasts() {
           {t.detail && <div className="text-xs text-cream-dim">{t.detail}</div>}
         </button>
       ))}
-    </div>
-  );
-}
-
-function WelcomeBack() {
-  const s = useGameState();
-  const { dismissWelcome } = useGame();
-  const w = s.welcome!;
-  const gained = PILLARS.filter((p) => w.xpGained[p] > 0);
-  const lines: { text: string; color?: string }[] = [];
-  if (w.firstVisit) {
-    lines.push({ text: `Level ${s.stats.overall.level} ${s.player.characterClass}. Your world starts here.` });
-    lines.push({ text: "Nothing is earned just by logging in — every win comes from real life." });
-    lines.push({ text: "Follow the red banners east from home. Coach Rafa is waiting across the bridge." });
-  } else {
-    for (const lu of w.levelUps)
-      lines.push({
-        text: lu.pillar === "overall" ? `You reached level ${lu.to}!` : `${PILLAR_META[lu.pillar].name} grew to level ${lu.to}!`,
-        color: lu.pillar === "overall" ? "#f2c14e" : PILLAR_META[lu.pillar].color,
-      });
-    for (const p of gained) lines.push({ text: `+${w.xpGained[p]} ${PILLAR_META[p].name} XP`, color: PILLAR_META[p].color });
-    if (w.xpGained.physical > 0 && !w.levelUps.some((l) => l.pillar === "physical")) lines.unshift({ text: "Your strength has increased!", color: PILLAR_META.physical.color });
-    for (const u of w.newUnlocks) lines.push({ text: `Unlocked: ${UNLOCKS_BY_KEY[u]?.name ?? u}`, color: "#fff1b0" });
-    for (const a of w.newAchievements) lines.push({ text: `Trophy: ${ACHIEVEMENTS_BY_KEY[a]?.name ?? a}`, color: "#f2c14e" });
-    if (w.physiqueChanged) lines.push({ text: "Your measured progress changed your physique.", color: PILLAR_META.physical.color });
-    for (const v of w.vaults)
-      lines.push({
-        text: `${v.name}: ${Math.floor(v.progress * 100)}% complete${v.deltaCents ? ` (${v.deltaCents > 0 ? "+" : "−"}${formatAud(Math.abs(v.deltaCents), { whole: true })})` : ""}`,
-        color: "#f2c14e",
-      });
-    if (!gained.length && !w.levelUps.length) lines.unshift({ text: "No new wins logged since your last visit. Today is a fresh start." });
-    for (const u of w.stageUps ?? []) lines.push({ text: `${PILLAR_META[u.pillar].world} grew into the ${STAGE_NAMES[u.pillar][u.to]}`, color: PILLAR_META[u.pillar].color });
-    if (w.fourWinsGained > 0) lines.push({ text: `🏮 ${w.fourWinsGained} new victory lantern${w.fourWinsGained === 1 ? "" : "s"} in the plaza`, color: "#f2c14e" });
-    if (w.evolvedTo != null) lines.push({ text: `✨ You evolved into ${EVOLUTION[w.evolvedTo].title}`, color: "#fff1b0" });
-    if (w.streak > 0) lines.push({ text: `🔥 ${w.streak}-day streak` });
-    const c = s.campaign;
-    if (c.dayNumber >= 1 && c.dayNumber <= c.totalDays) lines.push({ text: `Day ${c.dayNumber} of ${c.totalDays} · ★ ${c.progress.fourWinsDays} Four Wins days` });
-  }
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-navy-950/80 p-4 backdrop-blur-sm">
-      <div className="px-panel w-full max-w-md p-6 text-center anim-pop" role="dialog" aria-modal="true" aria-labelledby="welcome-title" data-testid="welcome">
-        <div className="mx-auto mb-3 w-fit rounded-lg bg-navy-950 p-2">
-          <Portrait equipped={s.player.equipped} tier={s.body.physiqueTier} size={96} art={s.player.settings.characterArt} anim={w.levelUps.length ? "celebrate-1" : "idle-down-0"} />
-        </div>
-        <h2 id="welcome-title" className="font-pixel text-2xl text-gold">
-          {w.firstVisit ? `Welcome, ${s.player.name}!` : `Welcome back, ${s.player.name}!`}
-        </h2>
-        {w.since && (
-          <p className="text-xs text-cream-faint">
-            Since {new Date(w.since).toLocaleString("en-AU", { timeZone: "Australia/Darwin", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
-          </p>
-        )}
-        <ul className="my-4 space-y-1.5">
-          {lines.map((l, i) => (
-            <li key={i} className="font-pixel anim-pop" style={{ color: l.color, animationDelay: `${150 + i * 140}ms` }}>
-              {l.text}
-            </li>
-          ))}
-        </ul>
-        <button
-          className="px-btn w-full text-lg"
-          onClick={() => {
-            play("start");
-            startMusic();
-            // The welcome-back screen stands in for today's title screen.
-            markTitleSeen(s.now.date);
-            dismissWelcome();
-          }}
-          autoFocus
-        >
-          Enter the world ▸
-        </button>
-      </div>
     </div>
   );
 }

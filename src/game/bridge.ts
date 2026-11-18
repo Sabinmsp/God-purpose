@@ -1,6 +1,10 @@
 import type { GameEvent, GameState } from "@/lib/shared/types";
 
+export type HabitLogKey = "workout" | "pr" | "measurement" | "expense_log" | "savings_deposit" | "gratitude3" | "journal" | "reflection" | "learning";
+
 export type PanelId =
+  | `log:${HabitLogKey}`
+  | "manage-habits"
   | "journal"
   | "workout"
   | "quests"

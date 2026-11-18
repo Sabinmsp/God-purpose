@@ -13,7 +13,7 @@ import { PillarGoals, PillarHeader, UnlockTrack } from "./common";
 
 const KINDS: WorkoutView["kind"][] = ["strength", "cardio", "mobility", "sport", "other"];
 
-function WorkoutForm({ onSaved }: { onSaved: () => void }) {
+export function WorkoutForm({ onSaved }: { onSaved: () => void }) {
   const { act } = useGame();
   const { busy, run } = useBusy();
   const [requestId, setRequestId] = useState(newRequestId);
@@ -135,7 +135,7 @@ function WeightChart() {
   );
 }
 
-function MeasurementForm() {
+export function MeasurementForm({ onSaved }: { onSaved?: () => void } = {}) {
   const { act } = useGame();
   const s = useGameState();
   const { busy, run } = useBusy();
@@ -148,7 +148,10 @@ function MeasurementForm() {
         e.preventDefault();
         void run(async () => {
           const ok = await act("/api/body/measurements", { date: f.date, weightKg: n(f.weightKg), waistCm: n(f.waistCm), bodyFatPct: n(f.bodyFatPct), notes: f.notes });
-          if (ok) setF((x) => ({ ...x, weightKg: "", waistCm: "", bodyFatPct: "", notes: "" }));
+          if (ok) {
+            setF((x) => ({ ...x, weightKg: "", waistCm: "", bodyFatPct: "", notes: "" }));
+            onSaved?.();
+          }
         });
       }}
     >

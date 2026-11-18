@@ -23,7 +23,7 @@ function Entries({ kind }: { kind: JournalEntryView["kind"] }) {
   );
 }
 
-function JournalBox({ kind, label, placeholder, cta }: { kind: JournalEntryView["kind"]; label: string; placeholder: string; cta: string }) {
+export function JournalBox({ kind, label, placeholder, cta, onSaved }: { kind: JournalEntryView["kind"]; label: string; placeholder: string; cta: string; onSaved?: () => void }) {
   const { act } = useGame();
   const { busy, run } = useBusy();
   const [text, setText] = useState("");
@@ -32,7 +32,10 @@ function JournalBox({ kind, label, placeholder, cta }: { kind: JournalEntryView[
       onSubmit={(e) => {
         e.preventDefault();
         void run(async () => {
-          if (await act("/api/journal", { kind, body: text.trim() })) setText("");
+          if (await act("/api/journal", { kind, body: text.trim() })) {
+            setText("");
+            onSaved?.();
+          }
         });
       }}
     >
@@ -83,7 +86,7 @@ export function MindPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-function GratitudeForm() {
+export function GratitudeForm() {
   const { act } = useGame();
   const s = useGameState();
   const { busy, run } = useBusy();

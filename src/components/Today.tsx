@@ -1,50 +1,45 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useGame, useGameState } from "@/client/store";
-import { setView } from "@/client/view";
+import { setView, type View } from "@/client/view";
 import { bridge } from "@/game/bridge";
 import { play } from "@/game/audio";
-import { nextSteps } from "@/lib/shared/brief";
 import { PILLARS, PILLAR_META, type Pillar } from "@/lib/shared/pillars";
-import type { DailyQuest } from "@/lib/shared/types";
-import { AiPanel } from "./panels/Ai";
+import { formatLongDate } from "@/lib/shared/time";
+import type { DailyQuest, DayProgress } from "@/lib/shared/types";
+import { HABIT_LOG_LABELS, isHabitLogKey } from "./panels/HabitLog";
+import { HabitHistory } from "./panels/HabitHistory";
 import { WellbeingCard } from "./panels/Wellbeing";
-import { AUTO_HINT, QuestRow } from "./quests";
 import { ReminderCard } from "./Reminders";
-import { Bar, useBusy } from "./ui";
+import { Bar, Portrait, useBusy } from "./ui";
 
-type Tab = "today" | "progress";
-
-/**
- * The calm, phone-first home: one screen, four wins, one next action.
- * Open it, see what to do, close it and go do it.
- */
-export function TodayApp() {
-  const { panel, openPanel } = useGame();
-  const [tab, setTab] = useState<Tab>("today");
-  const scroller = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    // Braces matter: newer browsers return a Promise from scrollTo, which React would take as a cleanup.
-    scroller.current?.scrollTo({ top: 0 });
-  }, [tab]);
+export function TodayApp({ view }: { view: "today" | "progress" }) {
   return (
-    <div className="today-bg relative flex h-full min-w-0 flex-1 flex-col" data-testid="today-app">
-      <div ref={scroller} className="scrollbar-thin flex-1 overflow-y-auto">
-        <div key={tab} className="anim-screen mx-auto w-full max-w-md px-4 pb-8 pt-[max(1.25rem,env(safe-area-inset-top))]">
-          {tab === "today" ? <TodayScreen /> : <ProgressScreen />}
-        </div>
+    <div key={view} className="today-bg scrollbar-thin min-h-0 flex-1 overflow-y-auto" data-testid="today-app">
+      <div className="habit-layout">
+        {view === "today" ? <TodayScreen /> : <ProgressScreen />}
       </div>
-      <nav className="shrink-0 border-t border-white/10 bg-navy-900/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-md" aria-label="Main">
-        <div className="mx-auto grid max-w-md grid-cols-4 px-2">
-          <TabButton icon="today" label="Today" active={tab === "today" && panel !== "ai"} onClick={() => (openPanel(null), setTab("today"))} />
-          <TabButton icon="progress" label="Progress" active={tab === "progress" && panel !== "ai"} onClick={() => (openPanel(null), setTab("progress"))} />
-          <TabButton icon="ai" label="AI" active={panel === "ai"} onClick={() => openPanel(panel === "ai" ? null : "ai")} />
-          <TabButton icon="world" label="World" onClick={() => (openPanel(null), play("whoosh"), setView("world"))} />
-        </div>
-      </nav>
-      {panel === "ai" && <AiPanel onClose={() => openPanel(null)} />}
     </div>
+  );
+}
+
+export function MainNavigation({ view }: { view: View }) {
+  const { panel, openPanel } = useGame();
+  function navigate(destination: View) {
+    openPanel(null);
+    setView(destination);
+  }
+
+  return (
+    <nav className="habit-nav" aria-label="Main">
+      <div>
+        <TabButton icon="today" label="Today" active={view === "today" && panel !== "ai"} onClick={() => navigate("today")} />
+        <TabButton icon="progress" label="Progress" active={view === "progress" && panel !== "ai"} onClick={() => navigate("progress")} />
+        <TabButton icon="world" label="Village" active={view === "world" && panel !== "ai"} onClick={() => navigate("world")} />
+        <TabButton icon="ai" label="AI" active={panel === "ai"} onClick={() => openPanel(panel === "ai" ? null : "ai")} />
+      </div>
+    </nav>
   );
 }
 
@@ -77,339 +72,147 @@ function TabButton({ icon, label, active = false, onClick }: { icon: keyof typeo
   );
 }
 
-function Header() {
+function PageHeading({ title }: { title: string }) {
   const s = useGameState();
-  const c = s.campaign;
-  const day = c.dayNumber < 1 ? `Starts in ${1 - c.dayNumber}d` : c.dayNumber > c.totalDays ? "Journey complete" : `Day ${c.dayNumber} / ${c.totalDays}`;
-  const part = s.now.hour < 12 ? "morning" : s.now.hour < 17 ? "afternoon" : "evening";
-  const date = new Date(`${s.now.date}T12:00:00Z`).toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
-  const journey = Math.min(1, Math.max(0, c.dayNumber / c.totalDays));
-  const streak = s.stats.streak.current;
   return (
-    <header>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-cream-faint">{date}</p>
-          <h1 className="mt-1 truncate text-2xl font-bold leading-tight">
-            Good {part}, <span className="text-gold">{s.player.name}</span>
-          </h1>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <span
-            className={`rounded-full px-2.5 py-1 text-sm font-semibold ${streak > 0 ? "bg-physical/15 text-physical" : "bg-white/5 text-cream-faint"}`}
-            aria-label={`${streak} day streak`}
-          >
-            🔥 {streak}
-          </span>
-          <span className="rounded-full bg-gold/15 px-2.5 py-1 text-sm font-semibold text-gold" aria-label={`Level ${s.stats.overall.level}`}>
-            Lv {s.stats.overall.level}
-          </span>
-        </div>
-      </div>
-      <div className="mt-3 flex items-center gap-3">
-        <span className="shrink-0 text-xs text-cream-dim" data-testid="today-day">
-          {day}
-        </span>
-        <span className="h-1 flex-1 overflow-hidden rounded-full bg-white/10" aria-hidden>
-          <span className="block h-full rounded-full bg-gold/70 transition-[width] duration-700" style={{ width: `${journey * 100}%` }} />
-        </span>
-      </div>
+    <header className="habit-page-heading">
+      <h1 className="font-pixel">{title}</h1>
+      <time dateTime={s.now.date}>{formatLongDate(s.now.date)}</time>
     </header>
   );
 }
 
-/** The pillar just won (from the server's events), for a moment: the ring pops and the card shakes. */
-function useFreshWin() {
-  const [fresh, setFresh] = useState<Pillar | null>(null);
+function TodayScreen() {
+  const s = useGameState();
+  const { openPanel } = useGame();
+  const won = new Set(s.today.quests.filter((quest) => quest.status === "done").map((quest) => quest.pillar));
+  const level = s.stats.overall;
+  const xpToday = PILLARS.reduce((total, pillar) => total + s.today.xpToday[pillar], 0);
+  const [fresh, setFresh] = useState<Pillar[]>([]);
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const off = bridge.on("events", (events) => {
-      const win = events.find((e) => e.type === "decoration");
-      if (!win || win.type !== "decoration") return;
-      setFresh(win.pillar);
+    let timer: ReturnType<typeof setTimeout>;
+    const unsubscribe = bridge.on("events", (events) => {
+      const pillars = events.flatMap((event) => event.type === "decoration" ? [event.pillar] : []);
+      if (!pillars.length) return;
+      setFresh(pillars);
       clearTimeout(timer);
-      timer = setTimeout(() => setFresh(null), 1100);
+      timer = setTimeout(() => setFresh([]), 650);
     });
     return () => {
-      off();
+      unsubscribe();
       clearTimeout(timer);
     };
   }, []);
-  return fresh;
-}
 
-function TodayScreen() {
-  const s = useGameState();
-  const won = new Set(s.today.quests.filter((q) => q.status === "done").map((q) => q.pillar));
-  const [open, setOpen] = useState<Pillar | null>(null);
-  const fresh = useFreshWin();
-  const xp = PILLARS.reduce((a, p) => a + s.today.xpToday[p], 0);
-  const left = 4 - won.size;
   return (
-    <div className="space-y-5">
-      <Header />
-      <section className={`card flex flex-col items-center px-4 pb-5 pt-6 ${fresh ? "anim-shake" : ""}`} aria-label="Today's wins">
-        <WinsRing won={won} fresh={fresh} />
-        <p className="mt-4 text-center text-sm text-cream-dim">
-          {won.size === 4 ? (
-            <>Every pillar won. That&apos;s a Four Wins day.</>
-          ) : won.size === 0 ? (
-            <>One small win in each pillar. Start anywhere.</>
-          ) : (
-            <>
-              {left} to go{xp > 0 && <> · <span className="text-gold">+{xp} XP</span> earned</>}
-            </>
-          )}
-        </p>
+    <>
+      <PageHeading title="Today" />
+      <section className="habit-character" aria-label="Character and daily progress">
+        <button className="habit-portrait" aria-label="Open character profile" onClick={() => openPanel("profile")}>
+          <Portrait equipped={s.player.equipped} tier={s.body.physiqueTier} size={54} art={s.player.settings.characterArt} />
+        </button>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+            <p className="font-pixel truncate text-lg leading-none">{s.player.name}</p>
+            <span className="text-xs font-bold text-gold">Lv {level.level}</span>
+          </div>
+          <Bar value={level.pct} label="Overall XP" className="mt-2 !h-2" />
+          <div className="mt-1 flex flex-wrap justify-between gap-x-2 text-xs text-cream-dim">
+            <span>{level.into}/{level.needed} XP</span>
+            <span data-testid="today-xp">+{xpToday} today</span>
+          </div>
+        </div>
+        <div className="habit-streak">
+          <span aria-hidden className="text-physical">◆</span>
+          <strong>{s.stats.streak.current}</strong>
+          <span>{s.stats.streak.current === 1 ? "day" : "days"} streak</span>
+        </div>
+        <div className="habit-wins">
+          <div>
+            <p className="font-pixel" data-testid="today-wins" aria-label={`${won.size} of 4`} aria-live="polite"><strong>{won.size}/4</strong> wins today</p>
+            <div className="habit-win-marks" aria-label="Pillar wins">
+              {PILLARS.map((pillar) => (
+                <span key={pillar} className={fresh.includes(pillar) ? "habit-reward-pop" : undefined}
+                  style={{ borderColor: PILLAR_META[pillar].color, color: won.has(pillar) ? "#10182a" : PILLAR_META[pillar].color, background: won.has(pillar) ? PILLAR_META[pillar].color : undefined }}
+                  title={`${PILLAR_META[pillar].name}: ${won.has(pillar) ? "won" : "open"}`}
+                >{won.has(pillar) ? "✓" : "·"}</span>
+              ))}
+            </div>
+          </div>
+          {s.today.fourWins ? <span className="habit-chest-message habit-reward-pop" role="status">✦ Village chest unlocked</span> : <span className="habit-chest-message text-cream-dim">Win all four to open the chest</span>}
+        </div>
       </section>
-      <NextStep />
-      <section aria-labelledby="pillars-title">
-        <h2 id="pillars-title" className="mb-2 px-1 text-xs font-semibold uppercase tracking-[0.18em] text-cream-faint">
-          Four life areas
-        </h2>
-        <ul className="card divide-y divide-white/5 overflow-hidden">
-          {PILLARS.map((p) => (
-            <PillarRow key={p} pillar={p} won={won.has(p)} open={open === p} onToggle={() => setOpen(open === p ? null : p)} />
-          ))}
-        </ul>
+      <div className="habit-list-heading">
+        <h2 className="font-pixel">Your habits</h2>
+        <button className="habit-manage" onClick={() => openPanel("manage-habits")}>Manage habits</button>
+      </div>
+      <div className="habit-grid">
+        {PILLARS.map((pillar) => {
+          const q = s.today.quests.filter((quest) => quest.pillar === pillar && (quest.status === "open" || quest.status === "done"));
+          const meta = PILLAR_META[pillar];
+          return (
+            <section key={pillar} className="habit-pillar" style={{ "--habit-accent": meta.color } as React.CSSProperties}
+              aria-labelledby={`today-${pillar}-heading`} data-testid={`today-pillar-${pillar}`}>
+              <header>
+                <h3 id={`today-${pillar}-heading`} className="font-pixel"><span aria-hidden>{meta.icon}</span> {meta.name}</h3>
+                {won.has(pillar) && <span className="habit-won">✓ Win earned</span>}
+              </header>
+              {q.length ? <ul>{q.map((quest) => <HabitRow key={quest.id} quest={quest} />)}</ul> : <p className="px-4 py-3 text-sm text-cream-dim">No habits scheduled today.</p>}
+            </section>
+          );
+        })}
+      </div>
+      <section className="habit-week" aria-labelledby="week-heading">
+        <div className="flex items-center justify-between">
+          <h2 className="font-pixel" id="week-heading">Last seven days</h2>
+          <button className="habit-manage" onClick={() => setView("progress")}>Full history</button>
+        </div>
+        <ol>{s.week.map((day) => <WeekDay key={day.date} day={day} today={day.date === s.now.date} />)}</ol>
       </section>
       <ReminderCard />
-    </div>
+    </>
   );
 }
 
-/** Four quarter arcs that fill with each pillar's colour once it is won. */
-function WinsRing({ won, fresh }: { won: Set<Pillar>; fresh: Pillar | null }) {
-  const r = 70;
-  const c = 2 * Math.PI * r;
-  const gap = 14;
-  const seg = c / 4 - gap;
-  // Icon badges sit on the middle of each arc (45° off the axes): top-right, bottom-right, bottom-left, top-left.
-  const near = `${((90 - r * Math.SQRT1_2) / 180) * 100}%`;
-  const far = `${((90 + r * Math.SQRT1_2) / 180) * 100}%`;
-  const spots = [
-    [far, near],
-    [far, far],
-    [near, far],
-    [near, near],
-  ];
+function HabitRow({ quest }: { quest: DailyQuest }) {
+  const { act, openPanel } = useGame();
+  const { busy, run } = useBusy();
+  const done = quest.status === "done";
+  const log = isHabitLogKey(quest.autoKey) ? quest.autoKey : null;
   return (
-    <div className="relative h-48 w-48">
-      <svg viewBox="0 0 180 180" className="h-full w-full -rotate-90" aria-hidden>
-        {PILLARS.map((p, i) => (
-          <circle
-            key={p}
-            cx="90"
-            cy="90"
-            r={r}
-            fill="none"
-            strokeWidth="12"
-            strokeLinecap="round"
-            stroke={won.has(p) ? PILLAR_META[p].color : "rgb(255 255 255 / .07)"}
-            strokeDasharray={`${seg} ${c - seg}`}
-            strokeDashoffset={-(i * (c / 4) + gap / 2)}
-            className={`transition-[stroke] duration-500 ${fresh === p ? "ring-flash" : ""}`}
-            style={won.has(p) ? { filter: `drop-shadow(0 0 6px ${PILLAR_META[p].color}88)` } : undefined}
-          />
-        ))}
-      </svg>
-      {PILLARS.map((p, i) => (
-        <span
-          key={p}
-          aria-hidden
-          className={`absolute -ml-[18px] -mt-[18px] grid h-9 w-9 place-items-center rounded-full border-2 text-base transition ${won.has(p) ? "" : "grayscale-[.6]"} ${fresh === p ? "badge-pop" : ""}`}
-          style={{ left: spots[i][0], top: spots[i][1], background: won.has(p) ? PILLAR_META[p].soft : "var(--navy-850)", borderColor: won.has(p) ? PILLAR_META[p].color : "var(--navy-900)" }}
-        >
-          {PILLAR_META[p].icon}
-          {fresh === p &&
-            Array.from({ length: 8 }, (_, k) => (
-              <span
-                key={k}
-                className="badge-spark absolute left-1/2 top-1/2 block h-1.5 w-1.5 rounded-full"
-                style={{ background: k % 2 ? "#fff1b0" : PILLAR_META[p].color, ["--a" as string]: `${k * 45}deg` }}
-              />
-            ))}
-        </span>
-      ))}
-      <div className="absolute inset-0 grid place-items-center text-center">
-        <div>
-          <div className="leading-none" data-testid="today-wins" aria-label={`${won.size} of 4`}>
-            <span className="font-pixel text-5xl text-cream">{won.size}</span>
-            <span className="ml-1 text-2xl text-cream-faint">/ 4</span>
-          </div>
-          <div className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-cream-faint">wins today</div>
-        </div>
+    <li className="habit-row">
+      <div className="min-w-0">
+        <p className={done ? "habit-done" : undefined}>{quest.title}</p>
+        <span className="habit-xp">+{done ? quest.xpAwarded : quest.xp} XP</span>
       </div>
-    </div>
-  );
-}
-
-function PillarRow({ pillar, won, open, onToggle }: { pillar: Pillar; won: boolean; open: boolean; onToggle: () => void }) {
-  const s = useGameState();
-  const m = PILLAR_META[pillar];
-  const quests = s.today.quests.filter((q) => q.pillar === pillar && q.status !== "skipped");
-  const done = quests.filter((q) => q.status === "done").length;
-  return (
-    <li>
-      <button
-        className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[.03]"
-        onClick={onToggle}
-        aria-expanded={open}
-        data-testid={`today-pillar-${pillar}`}
-      >
-        <span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-xl" style={{ background: m.soft }}>
-          {m.icon}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-baseline justify-between gap-2">
-            <span className="font-semibold">{m.name}</span>
-            <span className="text-xs text-cream-faint">Lv {s.stats.pillars[pillar].level}</span>
-          </span>
-          <span className="mt-1.5 flex items-center gap-2">
-            <span className="h-1 flex-1 overflow-hidden rounded-full bg-white/10" aria-hidden>
-              <span className="block h-full rounded-full transition-[width] duration-500" style={{ width: `${quests.length ? (done / quests.length) * 100 : 0}%`, background: m.color }} />
-            </span>
-            <span className="text-xs tabular-nums text-cream-faint">
-              {done}/{quests.length}
-            </span>
-          </span>
-        </span>
-        <span
-          className="grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 text-sm font-bold transition"
-          style={{ borderColor: won ? m.color : "rgb(255 255 255 / .15)", background: won ? m.color : "transparent", color: "#070a1f" }}
-          aria-label={won ? "Won" : "Not yet"}
+      {!done && log && <button className="habit-log" aria-label={`${HABIT_LOG_LABELS[log]} for ${quest.title}`} onClick={() => openPanel(`log:${log}`)}>Log</button>}
+      {(!quest.autoOnly || done) && (
+        <button
+          role="checkbox"
+          aria-checked={done}
+          aria-label={done && !quest.autoOnly ? `Undo ${quest.title}` : quest.title}
+          className="habit-check"
+          disabled={busy || quest.autoOnly}
+          title={done && log && !quest.autoOnly ? "Undo the habit and XP. Your saved log stays in your records." : undefined}
+          onClick={() => run(() => act(`/api/quests/${done ? "undo" : "complete"}`, { dailyQuestId: quest.id }))}
         >
-          {won ? "✓" : ""}
-        </span>
-        <svg viewBox="0 0 24 24" className={`h-4 w-4 shrink-0 text-cream-faint transition-transform ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-          <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
-      {open && (
-        <ul className="space-y-1 px-3 pb-3 anim-pop">
-          {quests.map((q) => (
-            <QuestRow key={q.id} q={q} compact />
-          ))}
-          {quests.length === 0 && <li className="px-1 text-sm text-cream-faint">Nothing on today&apos;s board.</li>}
-        </ul>
+          <span aria-hidden>{done ? "✓" : ""}</span>
+        </button>
       )}
     </li>
   );
 }
 
-const PANEL_FOR: Record<Pillar, "mental" | "physical" | "spiritual" | "financial"> = { mental: "mental", physical: "physical", spiritual: "spiritual", financial: "financial" };
-const FOCUS_SECONDS = 5 * 60;
-
-function NextStep() {
-  const s = useGameState();
-  const { act, openPanel } = useGame();
-  const { busy, run } = useBusy();
-  const steps = nextSteps(s);
-  const [skip, setSkip] = useState(0);
-  const [endsAt, setEndsAt] = useState<number | null>(null);
-  const [now, setNow] = useState(() => Date.now());
-  const q: DailyQuest | undefined = steps[skip % Math.max(1, steps.length)];
-
-  useEffect(() => {
-    if (endsAt === null) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [endsAt]);
-  const left = endsAt === null ? null : Math.max(0, Math.ceil((endsAt - now) / 1000));
-  useEffect(() => {
-    if (left === 0) navigator.vibrate?.(200);
-  }, [left]);
-
-  if (s.today.fourWins || !q) {
-    return (
-      <section className="card p-5 text-center" data-testid="next-step">
-        <div className="text-2xl">🌿</div>
-        <h2 className="mt-1 font-semibold">{s.today.fourWins ? "All four wins today." : "Nothing left on today's board."}</h2>
-        <p className="mt-1 text-sm text-cream-dim">Put the phone down and enjoy the rest of your day.</p>
-      </section>
-    );
-  }
-
-  const m = PILLAR_META[q.pillar];
-  const complete = () =>
-    run(async () => {
-      play("click");
-      if (await act("/api/quests/complete", { dailyQuestId: q.id })) setEndsAt(null);
-    });
-
+function WeekDay({ day, today }: { day: DayProgress; today: boolean }) {
+  const label = new Date(`${day.date}T00:00:00Z`).toLocaleDateString("en-AU", { weekday: "short", timeZone: "UTC" });
   return (
-    <section
-      className="card relative overflow-hidden p-5"
-      style={{ borderColor: `${m.color}55`, backgroundImage: `radial-gradient(120% 90% at 100% 0%, ${m.color}1f, transparent 60%)` }}
-      data-testid="next-step"
-      aria-labelledby="next-step-title"
-    >
-      <div className="flex items-center justify-between">
-        <h2 id="next-step-title" className="text-xs font-semibold uppercase tracking-[0.18em] text-gold">
-          ✦ Your next step
-        </h2>
-        {steps.length > 1 && endsAt === null && (
-          <button className="rounded-full px-2 py-1 text-xs text-cream-faint transition-colors hover:bg-white/5 hover:text-cream" onClick={() => setSkip((n) => n + 1)}>
-            Something else ↻
-          </button>
-        )}
-      </div>
-      <p className="mt-3 text-xl font-semibold leading-snug" data-testid="next-step-title">
-        {q.title}
-      </p>
-      <p className="mt-2 flex items-center gap-2 text-sm">
-        <span className="rounded-full px-2 py-0.5 font-medium" style={{ background: m.soft, color: m.color }}>
-          {m.icon} {m.name}
-        </span>
-        <span className="font-semibold text-gold">+{q.xp} XP</span>
-      </p>
-
-      {q.autoOnly ? (
-        <>
-          <p className="mt-3 text-sm text-cream-faint">{AUTO_HINT[q.autoKey ?? ""]}.</p>
-          <button className="px-btn mt-4 w-full" onClick={() => openPanel(PANEL_FOR[q.pillar])}>
-            Log it
-          </button>
-        </>
-      ) : left !== null ? (
-        <div className="mt-4 text-center">
-          {left > 0 ? (
-            <div className="font-pixel text-4xl tabular-nums" aria-live="off" data-testid="focus-timer">
-              {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}
-            </div>
-          ) : (
-            <p className="text-cream-dim" role="status">
-              Five minutes done. Did you do it?
-            </p>
-          )}
-          <Bar value={1 - left / FOCUS_SECONDS} color={m.color} className="mt-3 !h-1.5 !border-0" label="Focus timer" />
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <button className="px-btn secondary" onClick={() => setEndsAt(null)}>
-              {left > 0 ? "Stop" : "Not yet"}
-            </button>
-            <button className="px-btn" disabled={busy} onClick={complete}>
-              Done ✓
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-4 grid grid-cols-[1fr_auto] gap-2">
-          <button
-            className="px-btn"
-            onClick={() => {
-              play("click");
-              setNow(Date.now());
-              setEndsAt(Date.now() + FOCUS_SECONDS * 1000);
-            }}
-          >
-            Start 5 min
-          </button>
-          <button className="px-btn secondary" disabled={busy} onClick={complete} aria-label={`Mark ${q.title} done`}>
-            Done ✓
-          </button>
-        </div>
-      )}
-    </section>
+    <li aria-current={today ? "date" : undefined} aria-label={`${formatLongDate(day.date)}, ${day.pillars.length} wins${day.rest ? ", rest day" : ""}`}>
+      <span>{label}</span>
+      <strong>{day.pillars.length}/4</strong>
+      <span className="habit-week-dots" aria-hidden>
+        {PILLARS.map((pillar) => <i key={pillar} style={{ background: day.pillars.includes(pillar) ? PILLAR_META[pillar].color : undefined }} />)}
+      </span>
+    </li>
   );
 }
 
@@ -425,7 +228,8 @@ function ProgressScreen() {
   });
   return (
     <div className="space-y-5">
-      <Header />
+      <PageHeading title="Progress" />
+      <HabitHistory />
       <section className="card p-4">
         <div className="flex items-baseline justify-between">
           <h2 className="font-semibold">Level {s.stats.overall.level}</h2>

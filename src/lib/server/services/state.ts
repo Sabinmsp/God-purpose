@@ -21,7 +21,7 @@ import { wellbeingSummary } from "./wellbeing";
 /** A new "visit" starts when the game is opened after this long away. */
 const VISIT_GAP_MS = 30 * 60 * 1000;
 
-async function rangeProgress(q: Q, playerId: string, from: string, date: string): Promise<DayProgress[]> {
+export async function rangeProgress(q: Q, playerId: string, from: string, date: string): Promise<DayProgress[]> {
   const xpRows = await q<{ local_date: string; xp: number }[]>`
     select local_date, sum(amount)::int as xp from xp_transactions
     where player_id = ${playerId} and local_date between ${from} and ${date}
