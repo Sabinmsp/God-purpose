@@ -25,9 +25,10 @@ export function TodayApp({ view }: { view: "today" | "progress" }) {
 }
 
 export function MainNavigation({ view }: { view: View }) {
-  const { panel, openPanel } = useGame();
+  const { panel, openPanel, setDialog } = useGame();
   function navigate(destination: View) {
     openPanel(null);
+    setDialog(null);
     setView(destination);
   }
 

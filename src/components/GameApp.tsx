@@ -261,7 +261,7 @@ function DialogContent({ dialog }: { dialog: NonNullable<ReturnType<typeof useGa
   }, [dialog, i, setDialog]);
   const last = i >= dialog.lines.length - 1;
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 flex justify-center p-3">
       <div className="px-panel pointer-events-auto w-full max-w-xl p-4 anim-pop" role="dialog" aria-live="polite" aria-label={dialog.speaker}>
         <div className="font-pixel mb-1 text-gold">{dialog.speaker}</div>
         <p className="min-h-12 text-lg leading-snug">{dialog.lines[i]}</p>
