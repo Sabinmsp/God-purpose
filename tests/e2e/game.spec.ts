@@ -330,7 +330,7 @@ test("Four Wins AI: talk to the NPC, chat, approve a mission, manage memory, che
 
   // Seed a past exchange in which the AI suggested a mission (as the server would store it).
   const db = postgres(process.env.E2E_DATABASE_URL ?? `postgres://${process.env.USER}@localhost:5432/fourwins_e2e`, { max: 1 });
-  const [player] = await db`select id from players limit 1`;
+  const [player] = await db`select player_id as id from auth_credentials where username = ${"sabin"}`;
   const [msg] = await db`insert into ai_messages (player_id, role, content) values (${player.id}, 'assistant', 'Earlier: here is a mission idea.') returning id`;
   await db`insert into ai_proposals (player_id, message_id, kind, payload) values (${player.id}, ${msg.id}, 'mission', ${db.json({ pillar: "spiritual", title: "Ten minutes of quiet breathing", xp: 20, reason: "A calm reset." })})`;
   await db.end();
