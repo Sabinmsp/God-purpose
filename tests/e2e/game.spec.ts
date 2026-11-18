@@ -470,6 +470,8 @@ test("logout ends the session on the server", async ({ page }) => {
 
 for (const mobile of [false, true]) {
   test(`home to Rafa, a saved workout and the return visit on ${mobile ? "mobile" : "desktop"}`, async ({ browser, baseURL }) => {
+    // The full walk and two world loads take longer with software rendering.
+    test.setTimeout(150_000);
     const context = await browser.newContext({
       baseURL,
       viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 900 },
