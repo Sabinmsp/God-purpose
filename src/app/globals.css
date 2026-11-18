@@ -708,3 +708,18 @@ button.hotbar-slot:hover {
   .world-hud [data-testid="hud-level"] { font-size: .62rem; }
   .journal-pages [data-testid="character-bar"] > div:last-child { flex-wrap: wrap; justify-content: center; }
 }
+
+.village-hud {
+  --village-shadow: #182b2e;
+  --village-panel: #24373a;
+  --village-border: #a28c63;
+}
+.village-hud .px-panel,
+.village-hud .world-objective {
+  background: var(--village-panel);
+  border: 1px solid var(--village-border);
+  border-radius: 0;
+  box-shadow: 0 3px 0 var(--village-shadow), inset 0 0 0 2px var(--village-shadow);
+}
+.village-hud .world-objective { border-left: 3px solid #d1ac69; }
+.village-hud .px-btn.secondary { background: var(--village-panel); }

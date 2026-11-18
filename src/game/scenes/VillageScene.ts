@@ -109,7 +109,7 @@ export class VillageScene extends WorldScene {
     this.live = false;
     this.plates = {};
     const roof = (img: Phaser.GameObjects.Image, headroom: number) => img.y - (img.height - headroom) * 0.66;
-    this.makePlate(SPOTS.home.x, roof(this.buildings.home, 0), "Home", null, 0xf2c14e);
+    this.makePlate(SPOTS.home.x, roof(this.buildings.home, 0), bridge.state?.player.name ?? "Home", "Home", 0xf2c14e);
     for (const p of PILLARS) {
       const b = this.buildings[p];
       this.plates[p] = this.makePlate(b.x, roof(b, STAGE_TOP), STAGE_NAMES[p][0], PILLAR_META[p].name, pillarColor(p));
@@ -281,9 +281,9 @@ export class VillageScene extends WorldScene {
       head.setText(text.toUpperCase());
       const w = Math.ceil(Math.max(head.width, tail?.width ?? 0) / 2) * 2 + 10;
       bg.clear()
-        .fillStyle(0x04061a, 1)
+        .fillStyle(0x212538, 1)
         .fillRoundedRect(-w / 2 - 1, -1, w + 2, h + 3, 3)
-        .fillStyle(0x0b1030, 0.94)
+        .fillStyle(0x292f3b, 0.96)
         .fillRoundedRect(-w / 2, 0, w, h, 2)
         .lineStyle(1, accent, 0.85)
         .strokeRoundedRect(-w / 2 + 1.5, 1.5, w - 3, h - 3, 2);
@@ -311,7 +311,7 @@ export class VillageScene extends WorldScene {
   private ambient() {
     // Chimney smoke
     this.add
-      .particles(SPOTS.home.x + 20, SPOTS.home.y - 70, "fx-dot", {
+      .particles(SPOTS.home.x + 30, SPOTS.home.y - 70, "fx-dot", {
         speedY: { min: -14, max: -8 },
         speedX: { min: -3, max: 6 },
         lifespan: 2600,

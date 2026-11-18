@@ -42,14 +42,14 @@ export function Hud() {
   const objective = arenaQuest ? "Meet Coach Rafa" : next && !s.today.rest.all ? next.title : "Visit the village plaza";
   const destination = arenaQuest ? "Across the bridge, east of home" : next && !s.today.rest.all ? PILLAR_META[next.pillar].world : "Daily Quest Board";
   return (
-    <div className="world-hud">
+    <div className="world-hud village-hud">
       <PlayerCard />
       <nav aria-label="Village actions">
         <button className="px-btn secondary" onClick={() => openPanel("journal")}>Journal</button>
         <button className="px-btn" onClick={() => openPanel("quests")}>Log a win</button>
       </nav>
       <div className="world-objective" aria-live="polite">
-        <span className="font-pixel text-xs uppercase tracking-wider text-gold">Tracked quest</span>
+        <span className="font-pixel text-xs text-gold">{s.player.name}’s village · {campaignLabel(s.campaign.dayNumber, s.campaign.totalDays)}</span>
         <strong className="font-pixel">{objective}</strong>
         <span className="text-xs text-cream-dim">{destination}</span>
       </div>
