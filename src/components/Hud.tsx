@@ -14,7 +14,8 @@ import { PILLARS, PILLAR_META, type Pillar } from "@/lib/shared/pillars";
 import { localClock } from "@/lib/shared/time";
 import { UNLOCKS_BY_KEY, nextUnlocks, type UnlockDef } from "@/lib/shared/unlocks";
 import { PixelArt } from "./panels/common";
-import { Bar, PillarChip, Portrait } from "./ui";
+import { Bar, PillarChip, Portrait, Sheet } from "./ui";
+import { WellbeingCard } from "./panels/Wellbeing";
 
 function useDarwinClock() {
   const [clock, setClock] = useState(() => localClock());
@@ -31,25 +32,45 @@ export function campaignLabel(day: number, total: number) {
   return `Day ${day} of ${total}`;
 }
 
-/** Everything drawn over the world: status at the top, character and location at the bottom. */
 export function Hud() {
+  const s = useGameState();
+  const { openPanel } = useGame();
+  const trained = s.body.workouts.some((workout) => workout.date === s.now.date);
+  const rest = s.today.rest.all || s.today.rest.physical;
+  const next = s.today.quests.find((quest) => quest.status === "open" && !(rest && quest.pillar === "physical"));
+  const arenaQuest = !trained && !rest;
+  const objective = arenaQuest ? "Meet Coach Rafa" : next && !s.today.rest.all ? next.title : "Visit the village plaza";
+  const destination = arenaQuest ? "Across the bridge, east of home" : next && !s.today.rest.all ? PILLAR_META[next.pillar].world : "Daily Quest Board";
   return (
-    <>
-      <div className="pointer-events-none absolute left-2 right-2 top-2 z-20 flex items-start justify-between gap-2 pt-[env(safe-area-inset-top)] lg:left-3 lg:right-3 lg:top-3">
-        <div className="pointer-events-auto flex min-w-0 flex-col gap-1.5 lg:gap-2">
-          <PlayerCard />
-          <PillarRow />
-        </div>
-        <div className="pointer-events-auto flex flex-col items-end gap-1.5 lg:gap-2">
-          <DateCard />
-          <NavBar />
-        </div>
+    <div className="world-hud village-hud">
+      <PlayerCard />
+      <nav aria-label="Village actions">
+        <button className="px-btn secondary" onClick={() => openPanel("journal")}>Journal</button>
+        <button className="px-btn" onClick={() => openPanel("quests")}>Log a win</button>
+      </nav>
+      <div className="world-objective" aria-live="polite">
+        <span className="font-pixel text-xs text-gold">{s.player.name}’s village · {campaignLabel(s.campaign.dayNumber, s.campaign.totalDays)}</span>
+        <strong className="font-pixel">{objective}</strong>
+        <span className="text-xs text-cream-dim">{destination}</span>
       </div>
-      <div className="pointer-events-none absolute inset-x-3 bottom-3 z-20 hidden items-end gap-3 pb-[env(safe-area-inset-bottom)] md:flex">
-        <LocationCard />
+    </div>
+  );
+}
+
+export function Journal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <Sheet title="Journal" onClose={onClose} wide>
+      <div className="journal-pages">
+        <DateCard />
+        <PillarRow />
+        <NavBar />
         <CharacterBar />
+        <Hotbar />
+        <WellbeingCard />
+        {children}
+        <LocationCard />
       </div>
-    </>
+    </Sheet>
   );
 }
 
@@ -132,13 +153,13 @@ const MENUS = [
 function NavBar() {
   const { openPanel } = useGame();
   return (
-    <nav className="flex flex-col gap-1 sm:flex-row lg:gap-1.5" aria-label="Menus">
-      <button className="px-btn secondary !h-9 !w-9 !p-0 text-lg lg:!h-11 lg:!w-11 lg:text-xl" onClick={() => (play("click"), setView("today"))} aria-label="Today view" title="Today view" data-testid="to-today">
-        ◉
+    <nav className="journal-nav" aria-label="Menus">
+      <button className="px-btn secondary small" onClick={() => { openPanel(null); play("click"); setView("today"); }} aria-label="Today view" title="Today view" data-testid="to-today">
+        Today
       </button>
       {MENUS.map(([id, icon, label]) => (
-        <button key={id} className="px-btn secondary !h-9 !w-9 !p-0 text-lg lg:!h-11 lg:!w-11 lg:text-xl" onClick={() => (play("click"), openPanel(id))} aria-label={label} title={label}>
-          {icon}
+        <button key={id} className="px-btn secondary small" onClick={() => (play("click"), openPanel(id))} aria-label={label} title={label}>
+          <span aria-hidden>{icon}</span> {label}
         </button>
       ))}
     </nav>
@@ -229,7 +250,7 @@ function LocationCard() {
   };
 
   return (
-    <section className="px-panel pointer-events-auto hidden w-60 shrink-0 p-2.5 min-[1180px]:block" aria-labelledby="loc-title" data-testid="location-card">
+    <section className="px-panel pointer-events-auto p-2.5" aria-labelledby="loc-title" data-testid="location-card">
       <div className="mb-1.5 flex items-center justify-between">
         <h2 id="loc-title" className="font-pixel text-sm">
           📍 Current Location

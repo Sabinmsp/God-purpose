@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ApiError, api } from "@/client/api";
-import { Portrait } from "@/components/ui";
-import { PILLARS, PILLAR_META } from "@/lib/shared/pillars";
+import "./entrance.css";
 
 type Mode = "login" | "signup";
 interface SignupPolicy {
@@ -101,26 +100,16 @@ export default function LoginForm() {
   };
 
   return (
-    <main className="relative grid min-h-dvh place-items-center overflow-hidden bg-navy-950 p-4">
-      <div aria-hidden className="pointer-events-none absolute inset-0 opacity-60" style={{ backgroundImage: "radial-gradient(#ffffff22 1px, transparent 1px)", backgroundSize: "22px 22px" }} />
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#16301a] to-transparent" />
-      <div className="relative w-full max-w-sm">
-        <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 w-fit rounded-lg bg-navy-900 p-2 shadow-[0_6px_0_#04061a]">
-            <Portrait equipped={{}} tier={0} size={96} />
-          </div>
-          <h1 className="font-pixel text-4xl text-gold drop-shadow-[0_3px_0_#04061a]">FOUR WINS</h1>
-          <p className="font-pixel text-cream-dim">The Life RPG · Level up in real life</p>
-          <div className="mt-3 flex justify-center gap-2" aria-hidden>
-            {PILLARS.map((p) => (
-              <span key={p} className="text-xl" title={PILLAR_META[p].name}>
-                {PILLAR_META[p].icon}
-              </span>
-            ))}
-          </div>
-        </div>
-        <form onSubmit={submit} className="px-panel space-y-3 p-5" aria-label={mode === "signup" ? "Create an account" : "Log in"} noValidate>
-          {mode === "signup" && <h2 className="font-pixel text-lg text-gold">Create your character</h2>}
+    <main className="entrance">
+      <div className="entrance-scene" aria-hidden="true" />
+      <div className="entrance-menu">
+        <header className="entrance-heading">
+          <p>The Life RPG</p>
+          <h1>Four Wins</h1>
+          <div className="entrance-rule" aria-hidden="true"><i /><i /><i /><i /></div>
+        </header>
+        <form onSubmit={submit} className="entrance-form space-y-3" aria-label={mode === "signup" ? "Create an account" : "Log in"} noValidate>
+          <h2 className="font-pixel text-lg text-gold">{mode === "signup" ? "Create your character" : needsCode ? "Verify your login" : "Continue your journey"}</h2>
           {needsCode ? (
             <label className="block">
               <span className="px-label">🔐 Authenticator code</span>
@@ -215,7 +204,7 @@ export default function LoginForm() {
               {mode === "login" ? "New here? Create an account" : "Already have an account? Log in"}
             </button>
           )}
-          <p className="text-center text-xs text-cream-faint">Your progress is private to your account. Attempts are rate-limited.</p>
+          <p className="text-center text-xs text-cream-faint">Your progress is private to your account.</p>
         </form>
       </div>
     </main>

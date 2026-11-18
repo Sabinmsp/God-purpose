@@ -11,6 +11,24 @@ import { Bar, Section, Sheet, Tabs, useBusy } from "../ui";
 
 const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+export function ManageHabitsPanel({ onClose }: { onClose: () => void }) {
+  const { openPanel } = useGame();
+  const [creating, setCreating] = useState(false);
+  return (
+    <Sheet title="Manage habits" onClose={onClose}>
+      <div className="mb-4">
+        {creating ? <QuestEditor onDone={() => setCreating(false)} /> : (
+          <div className="flex flex-wrap gap-2">
+            <button className="px-btn" onClick={() => setCreating(true)}>+ New habit</button>
+            <button className="px-btn secondary" onClick={() => openPanel("quests")}>Daily board</button>
+          </div>
+        )}
+      </div>
+      <QuestManager />
+    </Sheet>
+  );
+}
+
 export function QuestBoardPanel({ onClose }: { onClose: () => void }) {
   const s = useGameState();
   const { act } = useGame();

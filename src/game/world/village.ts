@@ -21,6 +21,7 @@ export type InteractAction =
   | { type: "scene"; scene: "home" | "village" }
   | { type: "npc"; npc: string }
   | { type: "talk"; speaker: string; lines: string[] }
+  | { type: "shelf" }
   | { type: "chest" }
   | { type: "pet"; id: string };
 
@@ -100,18 +101,53 @@ export function buildVillage() {
   fill(10, 37, 10, 6, () => (r() < 0.5 ? T.GRAVEL_RAKED : T.GRAVEL)); // zen garden
   fill(44, 37, 15, 6, () => (r() < 0.5 ? T.GOLD_STONE : T.STONE)); // market square
 
+  // Gardens at the ends of the village leave the main routes open.
+  for (const [x, y, w, h] of [[4, 5, 14, 3], [45, 4, 12, 2], [4, 29, 11, 3], [22, 40, 12, 3]]) {
+    for (let row = y; row < y + h; row++) {
+      for (let col = x; col < x + w; col++) {
+        if ((col === x || col === x + w - 1) && (row === y || row === y + h - 1)) continue;
+        ground[row][col] = (col + row) % 3 ? T.GRASS_DARK : T.GRASS_TUFT;
+      }
+    }
+  }
   // Roads and plaza
   fill(6, 14, 53, 2, pathTile);
   fill(6, 34, 53, 2, pathTile);
   fill(31, 16, 2, 18, pathTile);
   fill(26, 17, 12, 10, () => (r() < 0.5 ? T.STONE : T.STONE_ALT));
   fill(12, 16, 2, 1, pathTile);
+  // Stepping stones lead from the south road to the sanctuary garden and
+  // the market, and from the plaza to the temple's outdoor reading area.
+  for (const [x, y, w, h] of [[12, 23, 12, 1], [12, 24, 1, 4], [17, 35, 1, 4], [49, 35, 1, 4]]) {
+    fill(x, y, w, h, T.STEPPING_STONE, true);
+  }
+  const plazaTrim = [[26, 17], [37, 17], [26, 26], [37, 26]];
+  for (const [x, y] of plazaTrim) fill(x, y, 1, 1, T.GRASS_TUFT, true);
+
+  // A two-tile brook crosses the east road. Only the bridge is walkable.
+  fill(40, 10, 1, 10, T.RIVER_W, true);
+  fill(41, 10, 1, 10, T.RIVER_E, true);
+  fill(40, 14, 2, 2, T.BRIDGE, true);
   // Pond with shore + waterfall corner (south-west)
   for (let y = 37; y < 43; y++) for (let x = 2; x < 9; x++) ground[y][x] = y === 37 ? T.SHORE_A : T.WATER_A;
   reserve(2, 37, 7, 6);
 
+  // Shape the road edges where the dirt meets meadow. Work from a copy so
+  // one replaced tile cannot affect the classification of a later tile.
+  const roads = ground.map((row) => row.map((tile) => tile === T.PATH || tile === T.PATH_PEBBLE));
+  const meadow = new Set<number>([T.GRASS, T.GRASS_TUFT, T.GRASS_FLOWERS, T.GRASS_FLOWERS_B, T.GRASS_DARK, T.MEADOW]);
+  for (let y = 1; y < H - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      if (!roads[y][x]) continue;
+      if (meadow.has(ground[y - 1][x])) ground[y][x] = T.PATH_N;
+      else if (meadow.has(ground[y + 1][x])) ground[y][x] = T.PATH_S;
+      else if (meadow.has(ground[y][x - 1])) ground[y][x] = T.PATH_W;
+      else if (meadow.has(ground[y][x + 1])) ground[y][x] = T.PATH_E;
+    }
+  }
+
   // Random scatter must keep paths walkable and leave designed districts alone.
-  const designed = new Set<number>([T.PATH, T.PATH_PEBBLE, T.STONE, T.STONE_ALT, T.CLAY, T.GRAVEL, T.GRAVEL_RAKED, T.GOLD_STONE, T.MEADOW]);
+  const designed = new Set<number>([T.PATH, T.PATH_PEBBLE, T.PATH_N, T.PATH_S, T.PATH_W, T.PATH_E, T.STONE, T.STONE_ALT, T.STEPPING_STONE, T.CLAY, T.GRAVEL, T.GRAVEL_RAKED, T.GOLD_STONE, T.MEADOW]);
   for (let y = 0; y < H; y++)
     for (let x = 0; x < W; x++) {
       if (designed.has(ground[y][x])) blocked[y][x] = true;
@@ -165,6 +201,9 @@ export function buildVillage() {
   lights.push({ x: 208, y: 190, size: 90, color: "purple" }, { x: 104, y: 226, size: 50, color: "purple" }, { x: 312, y: 226, size: 50, color: "purple" });
 
   // Strength Arena district
+  for (const x of [592, 688, 766]) add({ key: "banner-red", x, y: 222 });
+  for (const [x, y] of [[638, 213], [675, 268], [642, 286]]) add({ key: "reeds", x, y });
+  add({ key: "empty-shelf", x: 258, y: 232, collide: { w: 26, h: 6 } });
   add({ key: "dumbbell-rack", x: 728, y: 296, collide: { w: 32, h: 8 } });
   add({ key: "barbell", x: 784, y: 320, collide: { w: 26, h: 6 } });
   add({ key: "dummy", x: 880, y: 300, collide: { w: 10, h: 6 } });
@@ -184,7 +223,7 @@ export function buildVillage() {
   add({ key: "bamboo", x: 340, y: 600, collide: { w: 12, h: 6 } });
   add({ key: "bamboo", x: 356, y: 612, collide: { w: 12, h: 6 } });
   for (const [x, y] of [[200, 640], [256, 660], [176, 672]]) add({ key: "rock", x, y, collide: { w: 14, h: 6 } });
-  add({ key: "waterfall", x: 34, y: 610, collide: { w: 36, h: 30 }, anim: "waterfall" });
+  add({ key: "waterfall", x: 57, y: 628, collide: { w: 36, h: 30 }, anim: "waterfall" });
   for (const [x, y] of [[80, 640], [116, 668], [60, 674]]) add({ key: "lily", x, y, flat: true });
   lights.push({ x: 208, y: 470, size: 90, color: "pink" });
 
@@ -227,9 +266,26 @@ export function buildVillage() {
     add({ key: r() < 0.5 ? "bush" : "rock", x: tx * TILE + 8, y: ty * TILE + 12, collide: { w: 12, h: 5 } });
   }
 
+  for (const [x, y] of [[118, 280], [134, 280], [150, 280], [270, 280], [286, 280], [302, 280],
+    [737, 270], [753, 270], [769, 270], [871, 270], [887, 270], [903, 270],
+    [147, 612], [163, 612], [179, 612], [244, 612], [260, 612], [276, 612]]) {
+    add({ key: "garden-fence", x, y });
+  }
+  for (const [x, y] of [[615, 222], [372, 268], [526, 513], [699, 565]]) add({ key: "waystone", x, y });
+
+  // Hand-placed gardens and shoreline details frame the walk between landmarks.
+  for (const [x, y] of [[468, 222], [563, 211], [121, 275], [310, 333], [124, 558], [281, 589], [347, 632]]) {
+    add({ key: "mushrooms", x, y });
+  }
+  for (const [x, y] of [[637, 185], [673, 210], [637, 293], [670, 315], [49, 635], [155, 664]]) {
+    add({ key: "river-grass", x, y });
+  }
+  for (const [x, y] of [[655, 203], [655, 291], [75, 661], [132, 637]]) add({ key: "river-rock", x, y, flat: true });
+
   // Interactables
   interact.push(
     { id: "home", ...SPOTS.home, y: SPOTS.home.y + 10, r: 22, label: "Your Home", verb: "Enter", action: { type: "scene", scene: "home" } },
+    { id: "shelf", x: 258, y: 237, r: 18, label: "Learning shelf", verb: "Read", action: { type: "shelf" } },
     { id: "temple", ...SPOTS.temple, y: SPOTS.temple.y + 10, r: 26, label: "Mind Temple", verb: "Enter", action: { type: "panel", panel: "mental" } },
     { id: "arena", ...SPOTS.arena, y: SPOTS.arena.y + 10, r: 26, label: "Strength Arena", verb: "Enter", action: { type: "panel", panel: "physical" } },
     { id: "sanctuary", ...SPOTS.sanctuary, y: SPOTS.sanctuary.y + 10, r: 26, label: "Spirit Sanctuary", verb: "Enter", action: { type: "panel", panel: "spiritual" } },
@@ -265,7 +321,7 @@ export function buildVillage() {
   const npcs: NpcSpawn[] = [
     { id: "guide", look: "guide", name: "The Guide", x: 568, y: 352, wander: 0 },
     { id: "librarian", look: "librarian", name: "Librarian Iris", x: 268, y: 280, wander: 40, activity: "read" },
-    { id: "coach", look: "coach", name: "Coach Rafa", x: 816, y: 288, wander: 30, activity: "exercise" },
+    { id: "coach", look: "coach", name: "Coach Rafa", x: 786, y: 246, wander: 0 },
     { id: "keeper", look: "keeper", name: "Keeper Hana", x: 288, y: 596, wander: 30, activity: "meditate" },
     { id: "banker", look: "banker", name: "Banker Otto", x: 752, y: 580, wander: 30 },
   ];
@@ -275,6 +331,8 @@ export function buildVillage() {
   const colliders = [
     ...props.filter((p) => p.collide).map((p) => ({ x: p.x, y: p.y - (p.collide!.oy ?? 0) - p.collide!.h / 2, w: p.collide!.w, h: p.collide!.h })),
     ...buildings.map((b) => ({ x: b.x, y: b.y - 6 - b.h / 2, w: b.w, h: b.h })),
+    { x: 656, y: 192, w: 32, h: 64 },
+    { x: 656, y: 288, w: 32, h: 64 },
     // pond water
     { x: 5.5 * TILE, y: 40.5 * TILE, w: 7 * TILE, h: 5 * TILE },
   ];
@@ -284,7 +342,7 @@ export function buildVillage() {
 
 export const MAX_GROWTH = 75;
 
-const NOT_GROWABLE = new Set<number>([T.PATH, T.PATH_PEBBLE, T.STONE, T.STONE_ALT, T.WATER_A, T.WATER_B, T.SHORE_A, T.SHORE_B, T.BRIDGE]);
+const NOT_GROWABLE = new Set<number>([T.PATH, T.PATH_PEBBLE, T.PATH_N, T.PATH_S, T.PATH_W, T.PATH_E, T.STONE, T.STONE_ALT, T.WATER_A, T.WATER_B, T.RIVER_W, T.RIVER_E, T.SHORE_A, T.SHORE_B, T.BRIDGE, T.STEPPING_STONE]);
 
 /**
  * Where each district grows: one slot per day a pillar is won, filling
@@ -326,7 +384,7 @@ function growthSlots(ground: number[][], props: Prop[], buildingTiles: number[][
   }
 
   const taken = new Set(Object.values(decorSlots).flat().map((s) => `${Math.floor(s.x / TILE)},${Math.floor(s.y / TILE)}`));
-  const isWalk = (tx: number, ty: number) => [T.PATH, T.PATH_PEBBLE, T.STONE, T.STONE_ALT].includes(ground[ty]?.[tx] as never);
+  const isWalk = (tx: number, ty: number) => [T.PATH, T.PATH_PEBBLE, T.PATH_N, T.PATH_S, T.PATH_W, T.PATH_E, T.STONE, T.STONE_ALT].includes(ground[ty]?.[tx] as never);
   const lanternCands: [number, number][] = [];
   for (let ty = 8; ty < 40; ty++)
     for (let tx = 14; tx < 50; tx++) {

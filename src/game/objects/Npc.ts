@@ -1,4 +1,5 @@
 import * as Phaser from "phaser";
+import { bridge } from "../bridge";
 import { showEmote } from "../packSprites";
 import type { NpcSpawn } from "../world/village";
 import { Actor, facingFrom } from "./Actor";
@@ -31,6 +32,7 @@ export class Npc extends Actor {
     this.noticeCooldown -= dt;
     if (nearPlayer && !this.wasNear && this.noticeCooldown <= 0) {
       showEmote(this.scene, this.sprite, "alert", 36, 900);
+      if (this.spawn.id === "coach" && !bridge.state?.player.settings.reducedMotion) this.doActivity("celebrate", 850);
       this.noticeCooldown = 8000;
     }
     this.wasNear = nearPlayer;

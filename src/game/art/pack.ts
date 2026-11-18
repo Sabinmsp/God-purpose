@@ -1,22 +1,18 @@
 import { Pixels } from "./paint";
 
-/**
- * Ninja Adventure asset pack by Pixel-boy and AAA, released under CC0:
- * https://pixel-boy.itch.io/ninja-adventure-asset-pack
- *
- * The sheets live in public/assets/ninja-adventure and are decoded once, before
- * any texture is drawn (the live game and the Journey snapshots both wait for
- * `loadPack()`). Everything that uses them falls back to the procedural art if
- * a sheet is missing or fails to load, so the game is complete either way.
+/** Shared atlas loader for the village and Journey snapshots. Source and
+ * license details for each pack live with the artwork in public/assets.
  */
 export const PACK_DIR = "/assets/ninja-adventure";
 export const PACK_TILE = 16;
 
 const SHEETS = {
-  floor: "TilesetFloor.png",
-  detail: "TilesetFloorDetail.png",
-  nature: "TilesetNature.png",
-  water: "TilesetWater.png",
+  floor: `${PACK_DIR}/TilesetFloor.png`,
+  detail: `${PACK_DIR}/TilesetFloorDetail.png`,
+  nature: `${PACK_DIR}/TilesetNature.png`,
+  water: `${PACK_DIR}/TilesetWater.png`,
+  town: "/assets/tiny-town/tiles.png",
+  swords: "/assets/tiny-swords/props.png",
 } as const;
 export type Sheet = keyof typeof SHEETS;
 
@@ -44,7 +40,7 @@ export function loadPack(): Promise<void> {
   loading ??= Promise.all(
     (Object.keys(SHEETS) as Sheet[]).map(async (key) => {
       try {
-        sheets.set(key, await decode(`${PACK_DIR}/${SHEETS[key]}`));
+        sheets.set(key, await decode(SHEETS[key]));
       } catch {
         /* missing sheet: keep the procedural art */
       }

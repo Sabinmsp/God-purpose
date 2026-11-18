@@ -56,7 +56,7 @@ export function chair(): Pixels {
   return p;
 }
 
-export function bookshelf(): Pixels {
+export function bookshelf(bookCount = 21): Pixels {
   const p = new Pixels(28, 36);
   p.rect(0, 0, 28, 36, "#7a5232");
   p.rect(2, 2, 24, 32, "#5e3d24");
@@ -64,7 +64,7 @@ export function bookshelf(): Pixels {
   for (let shelf = 0; shelf < 3; shelf++) {
     const y = 3 + shelf * 11;
     p.hline(2, y + 9, 24, "#9a6a3e");
-    for (let i = 0; i < 7; i++) p.rect(3 + i * 3, y + 1 + (i % 3 === 0 ? 1 : 0), 2, 8 - (i % 3 === 0 ? 1 : 0), colors[(i + shelf) % colors.length]);
+    for (let i = 0; i < Math.min(7, bookCount - shelf * 7); i++) p.rect(3 + i * 3, y + 1 + (i % 3 === 0 ? 1 : 0), 2, 8 - (i % 3 === 0 ? 1 : 0), colors[(i + shelf) % colors.length]);
   }
   p.outline(OUT);
   return p;

@@ -277,7 +277,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
               ["muted", st.muted ? "🔇 Sound off" : "🔊 Sound on"],
               ["music", st.music ? "🎵 Music on" : "🎵 Music off"],
               ["reducedMotion", st.reducedMotion ? "Reduced motion: on" : "Reduced motion: off"],
-              ["showSidePanel", st.showSidePanel ? "Desktop side panel: shown" : "Desktop side panel: hidden"],
+              ["showSidePanel", st.showSidePanel ? "Daily Four in journal: shown" : "Daily Four in journal: hidden"],
             ] as const
           ).map(([key, label]) => (
             <button key={key} className="px-btn secondary w-full !justify-start" aria-pressed={st[key]} onClick={() => toggle(key)} disabled={busy}>

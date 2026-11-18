@@ -3,6 +3,8 @@ import { STAGE_NAMES } from "@/lib/shared/campaign";
 import { carStage } from "@/lib/shared/money";
 import { PILLARS, PILLAR_META, type Pillar } from "@/lib/shared/pillars";
 import type { GameState } from "@/lib/shared/types";
+import { bookshelf } from "../art/furniture";
+import { addPixels } from "../textures";
 import { STAGE_TOP } from "../art/evolution";
 import { buildingKey, decorationKey } from "../art/registry";
 import { T, TILE } from "../art/tiles";
@@ -22,7 +24,7 @@ import { WorldScene } from "./WorldScene";
 const CRITTERS: CritterSpec[] = [
   { id: "cat", tex: "na-cat", name: "Miso the cat", x: 704, y: 206, roam: 22, speed: 22, pet: true },
   { id: "dog", tex: "na-dog", name: "Kuma the dog", x: 540, y: 410, roam: 48, speed: 30, pet: true, loyal: true },
-  { id: "hen-a", tex: "na-chicken-white", name: "Hen", x: 636, y: 628, roam: 30, speed: 16, skittish: true },
+  { id: "hen-a", tex: "na-chicken-white", name: "Hen", x: 693, y: 247, roam: 23, speed: 16, skittish: true },
   { id: "hen-b", tex: "na-chicken-brown", name: "Hen", x: 652, y: 648, roam: 30, speed: 16, skittish: true },
   { id: "hen-c", tex: "na-chicken-black", name: "Hen", x: 620, y: 652, roam: 30, speed: 16, skittish: true },
   { id: "frog", tex: "na-frog", name: "Frog", x: 152, y: 664, roam: 9, speed: 34, skittish: true, hops: true },
@@ -36,6 +38,11 @@ const LIGHT_TEX = { warm: "glow-warm", cool: "glow-cool", purple: "glow-purple",
 export class VillageScene extends WorldScene {
   readonly sceneName = "village" as const;
   private buildings: Record<string, Phaser.GameObjects.Image> = {};
+  private shelf!: Phaser.GameObjects.Image;
+  private shelfCount = -1;
+  private pennant!: Phaser.GameObjects.Image;
+  private reflectionLantern!: Phaser.GameObjects.Image;
+  private reflectionLight?: Phaser.GameObjects.Image;
   private layer!: Phaser.Tilemaps.TilemapLayer;
   private from?: string;
   private petals?: Phaser.GameObjects.Particles.ParticleEmitter;
@@ -75,9 +82,15 @@ export class VillageScene extends WorldScene {
       },
     });
 
+    this.shelfCount = -1;
+    this.reflectionLight = undefined;
     for (const p of v.props) {
       const obj = p.anim ? this.add.sprite(p.x, p.y, p.anim).play(p.anim) : this.add.image(p.x, p.y, p.key);
       obj.setOrigin(0.5, 1).setDepth(p.flat ? -5 : p.y);
+      if (p.key === "empty-shelf") this.shelf = obj;
+      if (p.key === "reeds" && !bridge.state?.player.settings.reducedMotion) {
+        this.tweens.add({ targets: obj, angle: 5, duration: 1100 + p.x, yoyo: true, repeat: -1, ease: "Sine.easeInOut" });
+      }
       if (p.key === "ai-bot") this.setupAiCompanion(obj);
     }
     for (const c of v.colliders) this.addSolid(c.x, c.y, c.w, c.h);
@@ -96,7 +109,7 @@ export class VillageScene extends WorldScene {
     this.live = false;
     this.plates = {};
     const roof = (img: Phaser.GameObjects.Image, headroom: number) => img.y - (img.height - headroom) * 0.66;
-    this.makePlate(SPOTS.home.x, roof(this.buildings.home, 0), "Home", null, 0xf2c14e);
+    this.makePlate(SPOTS.home.x, roof(this.buildings.home, 0), bridge.state?.player.name ?? "Home", "Home", 0xf2c14e);
     for (const p of PILLARS) {
       const b = this.buildings[p];
       this.plates[p] = this.makePlate(b.x, roof(b, STAGE_TOP), STAGE_NAMES[p][0], PILLAR_META[p].name, pillarColor(p));
@@ -105,6 +118,11 @@ export class VillageScene extends WorldScene {
     this.buildings.vault = this.add.image(SPOTS.vault.x, SPOTS.vault.y, "vault-0").setOrigin(0.5, 1).setDepth(SPOTS.vault.y);
     this.buildings.garage = this.add.image(SPOTS.garage.x, SPOTS.garage.y, "garage-0").setOrigin(0.5, 1).setDepth(SPOTS.garage.y);
 
+    const flagX = SPOTS.arena.x + 34;
+    const flagBase = SPOTS.arena.y - 4;
+    this.add.rectangle(flagX, flagBase, 2, 52, 0x81572f).setOrigin(.5, 1).setDepth(flagBase + 1);
+    this.pennant = this.add.image(flagX, flagBase - 25, "banner-red").setOrigin(.5, 1).setDepth(flagBase + 2).setVisible(false);
+    this.reflectionLantern = this.add.image(254, 550, "victory-lantern").setOrigin(.5, 1).setDepth(550).setVisible(false);
     this.interactables = v.interact;
     for (const spawn of v.npcs) this.npcs.push(new Npc(this, spawn));
     this.addVillageLife();
@@ -216,6 +234,15 @@ export class VillageScene extends WorldScene {
   }
 
   protected runAction(action: InteractAction) {
+    if (action.type === "shelf") {
+      const count = bridge.state?.learningEntries ?? 0;
+      bridge.emit("dialog", {
+        speaker: "Learning shelf",
+        lines: [count ? `Your collection holds ${count} learning ${count === 1 ? "note" : "notes"}.` : "The first space is yours. Write down something you learned today."],
+        action: { label: "Visit Mind Temple", panel: "mental" },
+      });
+      return;
+    }
     if (action.type === "chest") return this.openChest();
     if (action.type === "pet") {
       if (this.critters.find((c) => c.spec.id === action.id)?.pet()) play("pet");
@@ -254,9 +281,9 @@ export class VillageScene extends WorldScene {
       head.setText(text.toUpperCase());
       const w = Math.ceil(Math.max(head.width, tail?.width ?? 0) / 2) * 2 + 10;
       bg.clear()
-        .fillStyle(0x04061a, 1)
+        .fillStyle(0x212538, 1)
         .fillRoundedRect(-w / 2 - 1, -1, w + 2, h + 3, 3)
-        .fillStyle(0x0b1030, 0.94)
+        .fillStyle(0x292f3b, 0.96)
         .fillRoundedRect(-w / 2, 0, w, h, 2)
         .lineStyle(1, accent, 0.85)
         .strokeRoundedRect(-w / 2 + 1.5, 1.5, w - 3, h - 3, 2);
@@ -284,7 +311,7 @@ export class VillageScene extends WorldScene {
   private ambient() {
     // Chimney smoke
     this.add
-      .particles(SPOTS.home.x + 20, SPOTS.home.y - 70, "fx-dot", {
+      .particles(SPOTS.home.x + 30, SPOTS.home.y - 70, "fx-dot", {
         speedY: { min: -14, max: -8 },
         speedX: { min: -3, max: 6 },
         lifespan: 2600,
@@ -412,6 +439,33 @@ export class VillageScene extends WorldScene {
   }
 
   protected onState(state: GameState) {
+    const trained = state.body.workouts.some((workout) => workout.date === state.now.date);
+    const hoisted = this.pennant.visible;
+    this.pennant.setVisible(trained);
+    if (trained && !hoisted && this.live) {
+      const coach = this.npcs.find((npc) => npc.spawn.id === "coach");
+      if (coach && !state.player.settings.reducedMotion) {
+        coach.doActivity("celebrate", 1600);
+        showEmote(this, coach.sprite, "star", 36, 1500);
+        this.tweens.add({ targets: this.pennant, y: { from: this.pennant.y + 22, to: this.pennant.y }, duration: 850 });
+      }
+      floatText(this, this.pennant.x, this.pennant.y - 30, "Pennant raised!", 0xffdf86);
+    }
+
+    const count = Math.min(21, state.learningEntries);
+    if (count !== this.shelfCount) {
+      const key = `learning-shelf-${count}`;
+      if (!this.textures.exists(key)) addPixels(this, key, bookshelf(count));
+      this.shelf.setTexture(key);
+      this.shelfCount = count;
+    }
+    const reflected = state.today.journal.some((entry) => entry.kind === "reflection");
+    this.reflectionLantern.setVisible(reflected);
+    if (reflected && !this.reflectionLight) this.reflectionLight = this.dayNight.addLight(254, 537, 64, "glow-gold");
+    if (!reflected && this.reflectionLight) {
+      this.dayNight.removeLight(this.reflectionLight);
+      this.reflectionLight = undefined;
+    }
     this.syncGrowth(state);
     this.syncChest(state);
 

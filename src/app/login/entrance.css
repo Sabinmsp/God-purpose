@@ -1,0 +1,57 @@
+.entrance {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  align-items: center;
+  min-height: 100svh;
+  padding: clamp(2rem, 6vw, 7rem);
+  background: #111c28;
+}
+.entrance-scene {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(90deg, #081322ed, #081322a6 26%, transparent 57%),
+    url("/assets/village-dusk.webp") center center / cover;
+}
+.entrance-menu { width: min(100%, 23rem); }
+.entrance-heading { margin-bottom: clamp(1.4rem, 3vh, 2.5rem); }
+.entrance-heading p {
+  font: 700 .76rem var(--font-body);
+  letter-spacing: .33em;
+  text-transform: uppercase;
+  color: #ffdc90;
+}
+.entrance-heading h1 {
+  margin: .25rem 0 .8rem -.045em;
+  font: 400 clamp(4.4rem, 7vw, 7.8rem)/.94 var(--font-pixel);
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: #fff0c5;
+  text-shadow: 0 4px #98623e, 0 8px #101723;
+}
+.entrance-rule { display: flex; align-items: center; gap: .45rem; }
+.entrance-rule i { width: 6px; height: 6px; background: var(--mental); transform: rotate(45deg); }
+.entrance-rule i:nth-child(2) { background: var(--physical); }
+.entrance-rule i:nth-child(3) { background: var(--spiritual); }
+.entrance-rule i:nth-child(4) { background: var(--financial); }
+.entrance-rule::after { content: ""; width: 7rem; height: 1px; background: linear-gradient(90deg,#cba871,transparent); }
+.entrance-form {
+  padding: clamp(1.15rem, 2.3vw, 1.85rem);
+  background: #101c28ef;
+  border: 1px solid #99805a;
+  box-shadow: inset 0 0 0 3px #111d29, inset 0 0 0 4px #6b644e, 0 8px 0 #07121cb3;
+  color-scheme: dark;
+}
+.entrance-form .px-input { background: #09131f; border: 1px solid #596263; box-shadow: inset 0 2px #060d15; }
+.entrance-form .px-input:focus { outline: 2px solid #edc675; outline-offset: 2px; }
+.entrance-form .px-btn { min-height: 2.9rem; background-color: #efc373; }
+.entrance-form .text-cream-faint { color: #acb3af; }
+@media (max-width: 650px) {
+  .entrance { align-items: end; padding: min(32vh,16rem) 1rem max(1.2rem,env(safe-area-inset-bottom)); }
+  .entrance-menu { margin-inline: auto; }
+  .entrance-scene { background: linear-gradient(0deg,#0a1623 13%,#0a162399 46%,transparent 72%),
+    url("/assets/village-dusk.webp") 75% top / auto min(64vh,33rem) no-repeat, #0a1623; }
+  .entrance-heading { margin-bottom: 1rem; }
+  .entrance-heading h1 { font-size: clamp(3.9rem,16vw,5rem); }
+}

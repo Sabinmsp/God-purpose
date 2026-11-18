@@ -40,9 +40,6 @@ interface Store {
   celebration: { day: number; total: number } | null;
   /** Set for a few seconds after an overall level-up (not shown during a Four Wins celebration). */
   levelUp: { level: number } | null;
-  /** The daily title screen covers the game, so movement pauses while it is open. */
-  titleOpen: boolean;
-  setTitleOpen: (open: boolean) => void;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -109,7 +106,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [celebration, setCelebration] = useState<{ day: number; total: number } | null>(null);
   const [levelUp, setLevelUp] = useState<{ level: number } | null>(null);
-  const [titleOpen, setTitleOpen] = useState(false);
   const stateRef = useRef<GameState | null>(null);
 
   const toast = useCallback((t: Omit<Toast, "id">) => {
@@ -236,9 +232,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
   // What else is covering the game, so closing the welcome screen can unpause it at once.
   const otherCovers = useRef(false);
   useEffect(() => {
-    otherCovers.current = Boolean(panel || dialog || locked || titleOpen);
+    otherCovers.current = Boolean(panel || dialog || locked);
     bridge.emit("ui-blocking", Boolean(otherCovers.current || state?.welcome));
-  }, [panel, dialog, locked, state?.welcome, titleOpen]);
+  }, [panel, dialog, locked, state?.welcome]);
 
   const value = useMemo<Store>(
     () => ({
@@ -257,8 +253,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
       dismissToast,
       celebration,
       levelUp,
-      titleOpen,
-      setTitleOpen,
       applyResult,
       dismissWelcome: () => {
         if (stateRef.current) apply({ ...stateRef.current, welcome: null });
@@ -267,7 +261,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         void api("/api/welcome/ack", { body: {} }).catch(() => {});
       },
     }),
-    [state, loading, locked, panel, dialog, toasts, celebration, levelUp, titleOpen, openPanel, act, refresh, toast, dismissToast, apply, applyResult],
+    [state, loading, locked, panel, dialog, toasts, celebration, levelUp, openPanel, act, refresh, toast, dismissToast, apply, applyResult],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

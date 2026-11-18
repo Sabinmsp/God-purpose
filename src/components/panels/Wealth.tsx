@@ -131,7 +131,7 @@ function VaultCard({ goal }: { goal: SavingsGoalView }) {
   );
 }
 
-function CashFlowForm() {
+export function CashFlowForm({ onSaved }: { onSaved?: () => void } = {}) {
   const { act } = useGame();
   const s = useGameState();
   const { busy, run } = useBusy();
@@ -153,6 +153,7 @@ function CashFlowForm() {
             setAmount("");
             setNote("");
             setRequestId(newRequestId());
+            onSaved?.();
           }
         });
       }}

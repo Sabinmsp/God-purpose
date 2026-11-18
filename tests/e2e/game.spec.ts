@@ -4,23 +4,22 @@ import { E2E_PASSWORD } from "../../playwright.config";
 
 const worldReady = (page: Page) => expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
 
-/** Phones open on the calm Today view; larger screens open in the world. */
-async function login(page: Page, opens: "world" | "today" = "world") {
+async function openVillage(page: Page) {
+  await page.getByRole("button", { name: "Village", exact: true }).click();
+  await worldReady(page);
+}
+
+async function login(page: Page, destination: "today" | "village" = "village") {
   await page.goto("/login");
   await page.getByLabel("Username").fill("sabin");
   await page.getByLabel("Password", { exact: true }).fill(E2E_PASSWORD);
   await page.getByRole("button", { name: /Enter the world/ }).click();
   await page.waitForURL("/");
-  if (opens === "world") await worldReady(page);
-  else await expect(page.getByTestId("today-app")).toBeVisible({ timeout: 30_000 });
-  // The game opens on either the welcome-back screen or the daily title screen (never both).
-  const welcome = page.getByTestId("welcome");
-  const title = page.getByTestId("title-screen");
-  await welcome.or(title).first().waitFor({ timeout: 5_000 }).catch(() => {});
-  if (await welcome.isVisible().catch(() => false)) await welcome.getByRole("button").click();
-  if (await title.isVisible().catch(() => false)) await title.getByRole("button", { name: /Continue/ }).click();
-  await expect(welcome).toBeHidden();
-  await expect(title).toBeHidden();
+  if (destination === "village") await openVillage(page);
+}
+
+async function openJournal(page: Page) {
+  await page.getByRole("button", { name: "Journal", exact: true }).click();
 }
 
 async function state(page: Page) {
@@ -83,7 +82,7 @@ test("reminders: the worker and scheduler are reachable without a session, and n
   expect((await request.post("/api/push/subscribe", { data: {}, headers: { origin: baseURL! } })).status()).toBe(401);
 });
 
-test("first visit: welcome screen, real progress, and persistence", async ({ page, baseURL }) => {
+test("first visit: opens on Today, real progress, and persistence", async ({ page, baseURL }) => {
   await page.goto("/login");
   await page.getByLabel("Username").fill("sabin");
   await page.getByLabel("Password", { exact: true }).fill(E2E_PASSWORD);
@@ -97,11 +96,8 @@ test("first visit: welcome screen, real progress, and persistence", async ({ pag
   expect(session.sameSite).toBe("Strict");
   expect(await page.evaluate(() => document.cookie)).not.toContain("fw_session");
 
-  const welcome = page.getByTestId("welcome");
-  await expect(welcome).toBeVisible({ timeout: 30_000 });
-  await expect(welcome).toContainText("Welcome, Sabin!");
-  await expect(welcome).toContainText("Nothing is earned just by logging in");
-  await welcome.getByRole("button").click();
+  await expect(page.getByRole("heading", { name: "Today", exact: true })).toBeVisible();
+  await openVillage(page);
 
   await expect(page.getByTestId("hud-name")).toHaveText("Sabin");
   await expect(page.getByTestId("hud-level")).toContainText("LV 1");
@@ -125,6 +121,7 @@ test("first visit: welcome screen, real progress, and persistence", async ({ pag
   await page.keyboard.press("Escape");
 
   // Save toward tuition in the Wealth Kingdom.
+  await openJournal(page);
   await page.getByRole("button", { name: /Financial level/ }).click();
   const wealth = page.getByRole("dialog", { name: "Wealth Kingdom" });
   const tuition = wealth.getByTestId("vault-tuition");
@@ -148,8 +145,7 @@ test("first visit: welcome screen, real progress, and persistence", async ({ pag
 
   // Refresh: everything is still there.
   await page.reload();
-  await expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId("welcome")).toBeHidden();
+  await openVillage(page);
   const reloaded = await state(page);
   expect(reloaded.stats.pillars.mental.xp).toBe(20);
   expect(reloaded.savings.goals.find((g: { key: string }) => g.key === "tuition").balanceCents).toBe(130000);
@@ -175,15 +171,15 @@ test("another device sees the same character, goals, balances and unlocks", asyn
   await login(page, "today");
   const s = await state(page);
 
-  // Today view: the wins ring matches the server, one next step, no horizontal scroll.
+  // Today shows the saved wins and a readable checklist.
   const wonPillars = new Set(s.today.quests.filter((q: { status: string }) => q.status === "done").map((q: { pillar: string }) => q.pillar));
   await expect(page.getByTestId("today-wins")).toHaveAttribute("aria-label", `${wonPillars.size} of 4`);
-  await expect(page.getByTestId("next-step")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your habits" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.getByRole("button", { name: "Progress" }).click();
   await expect(page.getByText(`Level ${s.stats.overall.level}`)).toBeVisible();
   // The pixel world is one tap away.
-  await page.getByRole("button", { name: "World" }).click();
+  await page.getByRole("button", { name: "Village" }).click();
   await worldReady(page);
   expect(s.stats.pillars.mental.xp).toBe(20);
   expect(s.savings.goals.find((g: { key: string }) => g.key === "tuition").balanceCents).toBe(130001);
@@ -241,7 +237,7 @@ test("keyboard movement, interaction and the home scene", async ({ page }) => {
     data: { scene: "village", x: 512, y: 240, facing: "up" },
   });
   await page.reload();
-  await expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
+  await openVillage(page);
   await expect(page.getByTestId("focus-prompt")).toContainText("Your Home", { timeout: 10_000 });
   await page.keyboard.press("e");
   await expect(page.getByTestId("focus-prompt")).not.toContainText("Your Home", { timeout: 5000 });
@@ -264,7 +260,7 @@ test("winning all four pillars grows the village, celebrates, and is recorded in
     data: { scene: "village", x: 472, y: 404, facing: "up" },
   });
   await page.reload();
-  await expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
+  await openVillage(page);
   const canvas = page.getByTestId("game-canvas");
   const s0 = await state(page);
   const wonToday = new Set(s0.today.quests.filter((q: { status: string }) => q.status === "done").map((q: { pillar: string }) => q.pillar));
@@ -298,7 +294,7 @@ test("winning all four pillars grows the village, celebrates, and is recorded in
 
   // Growth is stored, not cosmetic: it survives a reload.
   await page.reload();
-  await expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
+  await openVillage(page);
   await expect(canvas).toHaveAttribute("data-lanterns", "1");
   const s1 = await state(page);
   expect(s1.campaign.progress).toMatchObject({ fourWinsDays: 1, tier: 1 });
@@ -315,6 +311,7 @@ test("winning all four pillars grows the village, celebrates, and is recorded in
   expect((await state(page)).stats.overall.totalXp).toBe(s1.stats.overall.totalXp);
 
   // The journey timeline records the day and its visual upgrades.
+  await openJournal(page);
   await page.getByTestId("hud-campaign").click();
   const journey = page.getByRole("dialog", { name: "75-Day Journey" });
   await expect(journey.getByTestId("journey-day-number")).toHaveText("Day 1 of 75");
@@ -326,14 +323,14 @@ test("winning all four pillars grows the village, celebrates, and is recorded in
   await expect(journey.getByTestId("before-after")).toBeVisible();
 });
 
-test("Four Wins AI: talk to the NPC, chat, approve a mission, manage memory, check location", async ({ page, context }) => {
-  await context.grantPermissions(["geolocation"], { origin: "http://localhost:3100" });
+test("Four Wins AI: talk to the NPC, chat, approve a mission, manage memory, check location", async ({ page, context, baseURL }) => {
+  await context.grantPermissions(["geolocation"], { origin: baseURL });
   await context.setGeolocation({ latitude: -12.463441, longitude: 130.845642, accuracy: 25 });
   await login(page);
 
   // Seed a past exchange in which the AI suggested a mission (as the server would store it).
   const db = postgres(process.env.E2E_DATABASE_URL ?? `postgres://${process.env.USER}@localhost:5432/fourwins_e2e`, { max: 1 });
-  const [player] = await db`select id from players limit 1`;
+  const [player] = await db`select player_id as id from auth_credentials where username = ${"sabin"}`;
   const [msg] = await db`insert into ai_messages (player_id, role, content) values (${player.id}, 'assistant', 'Earlier: here is a mission idea.') returning id`;
   await db`insert into ai_proposals (player_id, message_id, kind, payload) values (${player.id}, ${msg.id}, 'mission', ${db.json({ pillar: "spiritual", title: "Ten minutes of quiet breathing", xp: 20, reason: "A calm reset." })})`;
   await db.end();
@@ -344,7 +341,7 @@ test("Four Wins AI: talk to the NPC, chat, approve a mission, manage memory, che
     data: { scene: "village", x: 440, y: 270, facing: "up" },
   });
   await page.reload();
-  await expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
+  await openVillage(page);
   await expect(page.getByTestId("focus-prompt")).toContainText("Four Wins AI", { timeout: 10_000 });
   await page.keyboard.press("e");
   const panel = page.getByRole("dialog", { name: "Four Wins AI" });
@@ -396,7 +393,8 @@ test("Four Wins AI: talk to the NPC, chat, approve a mission, manage memory, che
 
   await page.unroute("**/api/ai/chat");
   await page.reload();
-  await expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
+  await openVillage(page);
+  await openJournal(page);
   await page.getByRole("button", { name: "Four Wins AI", exact: true }).click();
   await panel.getByRole("tab", { name: /Memory/ }).click();
   await expect(panel.getByTestId("ai-memory-list")).toContainText("I prefer workouts before 8am");
@@ -415,9 +413,10 @@ test("Four Wins AI: talk to the NPC, chat, approve a mission, manage memory, che
   await expect(panel.getByTestId("location-check")).toHaveCount(0);
 });
 
-test("one-page HUD: attributes, hotbar and a wellbeing check-in that persists", async ({ page }) => {
+test("journal: attributes, hotbar and a wellbeing check-in that persists", async ({ page }) => {
   await login(page);
   const s = await state(page);
+  await openJournal(page);
   const bar = page.getByTestId("character-bar");
   await expect(bar).toBeVisible();
   await expect(bar.getByRole("button", { name: `Intelligence ${s.stats.missionsDone.mental}`, exact: true })).toBeVisible();
@@ -430,6 +429,7 @@ test("one-page HUD: attributes, hotbar and a wellbeing check-in that persists", 
   await expect(chat.getByTestId("ai-brief")).toContainText(`Day ${s.campaign.dayNumber} of your 75-day journey`);
   await chat.getByRole("button", { name: "Close", exact: true }).click();
 
+  await openJournal(page);
   const card = page.getByTestId("wellbeing");
   await expect(card.getByTestId("wellbeing-sleepMinutes")).toHaveText("—");
   await card.getByRole("button", { name: /Check in/ }).click();
@@ -442,7 +442,8 @@ test("one-page HUD: attributes, hotbar and a wellbeing check-in that persists", 
   await expect(card.getByTestId("wellbeing-mood")).toHaveText("4/5");
 
   await page.reload();
-  await expect(page.locator(`[data-testid="game-canvas"][data-ready="true"] canvas`)).toBeVisible({ timeout: 30_000 });
+  await openVillage(page);
+  await openJournal(page);
   await expect(page.getByTestId("wellbeing").getByTestId("wellbeing-sleepMinutes")).toHaveText("7.5h");
   const after = await state(page);
   expect(after.stats.overall.totalXp).toBe(s.stats.overall.totalXp);
@@ -450,6 +451,7 @@ test("one-page HUD: attributes, hotbar and a wellbeing check-in that persists", 
 
 test("logout ends the session on the server", async ({ page }) => {
   await login(page);
+  await openJournal(page);
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Log out" }).click();
   await page.waitForURL(/\/login$/);
